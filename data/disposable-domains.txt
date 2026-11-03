@@ -1,0 +1,28 @@
+# OpenVerify MCP disposable domain dataset
+# Source: curated local seed (not downloaded per request)
+# Updated: 2026-11-03T00:00:00.000Z
+# One domain per line. Lines starting with # are comments.
+# Documented update sources (opt-in via update_disposable_domains tool / npm run update:disposable):
+#   - https://raw.githubusercontent.com/disposable-email-domains/disposable-email-domains/master/disposable_email_blocklist.conf
+#   - https://cdn.jsdelivr.net/gh/disposable/disposable-email-domains@master/domains.txt
+
+10minutemail.com
+discard.email
+dispostable.com
+emailondeck.com
+fakeinbox.com
+getnada.com
+guerrillamail.com
+guerrillamail.net
+mailinator.com
+maildrop.cc
+mailnesia.com
+mintemail.com
+moakt.com
+sharklasers.com
+temp-mail.org
+tempail.com
+tempmail.com
+throwawaymail.com
+trashmail.com
+yopmail.com
