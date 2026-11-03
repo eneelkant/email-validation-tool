@@ -17,6 +17,3 @@ tmp/
 .idea/
 .vscode/
 !*.example
-
-data/runtime/
-data/uploads/
