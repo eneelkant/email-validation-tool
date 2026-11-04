@@ -1,0 +1,75 @@
+{
+  "name": "openverify-mcp",
+  "version": "0.1.0",
+  "description": "OpenVerify MCP — free, open-source, self-hosted email verification MCP server",
+  "type": "module",
+  "license": "GPL-3.0-only",
+  "author": "eneelkant",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eneelkant/email-validation-tool.git"
+  },
+  "homepage": "https://github.com/eneelkant/email-validation-tool",
+  "bugs": {
+    "url": "https://github.com/eneelkant/email-validation-tool/issues"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "openverify-mcp": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "start:stdio": "node dist/index.js --transport stdio",
+    "start:http": "node dist/index.js --transport http",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "update:disposable": "tsx scripts/update-disposable-domains.ts"
+  },
+  "keywords": [
+    "mcp",
+    "email",
+    "validation",
+    "verification",
+    "openverify",
+    "dns",
+    "mx",
+    "disposable"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/express": "^2.0.2",
+    "@modelcontextprotocol/node": "^2.1.2",
+    "@modelcontextprotocol/server": "^2.4.0",
+    "better-sqlite3": "^11.10.0",
+    "cors": "^2.8.6",
+    "csv-parse": "^7.0.3",
+    "csv-stringify": "^6.9.0",
+    "dotenv": "^16.6.1",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.3",
+    "pino": "^10.4.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.20.5",
+    "eslint": "^9.39.5",
+    "pino-pretty": "^13.2.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^3.2.7"
+  }
+}

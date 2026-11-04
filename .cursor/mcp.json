@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "openverify": {
+      "command": "node",
+      "args": ["dist/index.js", "--transport", "stdio"],
+      "env": {
+        "OPENVERIFY_TRANSPORT": "stdio",
+        "OPENVERIFY_LOG_LEVEL": "info",
+        "OPENVERIFY_SMTP_ENABLED": "false"
+      }
+    }
+  }
+}
