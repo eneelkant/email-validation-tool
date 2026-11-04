@@ -34,10 +34,11 @@
 
 | Symptom | Fix |
 |---------|-----|
-| `Email column "…" not found` | Pass correct `email_column` or rename header |
+| `Email column "…" not found` | Only when preferred `email_column` is set; pass a real header or omit it (auto-detect / first-column fallback) |
+| Wrong column validated | Nonstandard headers without `email_column` fall back to the **first** column — set `email_column` explicitly |
 | Job `failed` on huge file | Check `OPENVERIFY_MAX_CSV_BYTES` |
 | Job stuck `running` | Check disk for output path; cancel via `cancel_validation_job` |
-| Path rejected | Keep files under `OPENVERIFY_UPLOAD_DIR` / `OPENVERIFY_OUTPUT_DIR` |
+| Path rejected | Stay under upload/output **or** `OPENVERIFY_DATA_DIR` / process CWD allowlists (see [security-config.md](./security-config.md#csv-path-allowlists)) |
 
 ## Docker (when available)
 
