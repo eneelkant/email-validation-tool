@@ -1,3 +1,16 @@
+# OpenVerify MCP — Docker Compose
+#
+# HTTP binds to 0.0.0.0 inside the container, so a non-empty
+# OPENVERIFY_HTTP_AUTH_TOKEN is REQUIRED (fail-closed at process startup).
+# Put the token in a local .env file (never commit real secrets).
+#
+# Example:
+#   echo 'OPENVERIFY_HTTP_AUTH_TOKEN=change-me-to-a-long-random-value' >> .env
+#   docker compose up --build
+#
+# Prefer TLS termination at a reverse proxy for any remote exposure.
+# Health checks: GET /health /ready /version (no secrets).
+
 services:
   openverify:
     build: .
@@ -7,10 +20,12 @@ services:
       OPENVERIFY_TRANSPORT: http
       OPENVERIFY_HTTP_HOST: 0.0.0.0
       OPENVERIFY_HTTP_PORT: 8787
-      OPENVERIFY_HTTP_AUTH_TOKEN: ${OPENVERIFY_HTTP_AUTH_TOKEN:-}
+      # Required: empty token will cause the container to exit on startup.
+      OPENVERIFY_HTTP_AUTH_TOKEN: ${OPENVERIFY_HTTP_AUTH_TOKEN:?Set OPENVERIFY_HTTP_AUTH_TOKEN in .env for Compose}
       OPENVERIFY_ALLOWED_HOSTS: ${OPENVERIFY_ALLOWED_HOSTS:-localhost,127.0.0.1}
       OPENVERIFY_LOG_LEVEL: info
       OPENVERIFY_SMTP_ENABLED: "false"
+      OPENVERIFY_CSV_BATCH_SIZE: ${OPENVERIFY_CSV_BATCH_SIZE:-100}
     volumes:
       - openverify-data:/data
     restart: unless-stopped

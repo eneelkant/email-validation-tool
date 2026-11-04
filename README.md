@@ -1,6 +1,6 @@
 # OpenVerify MCP
 
-**Free, open-source, self-hosted email verification MCP server** for unlimited local validation, bulk CSV processing, DNS/MX checks, and disposable-email detection — without paid API credits.
+**Free, open-source, self-hosted email verification MCP server** for local validation, bounded bulk CSV processing, DNS/MX checks, and disposable-email detection — without paid API credits.
 
 > Repository: [eneelkant/email-validation-tool](https://github.com/eneelkant/email-validation-tool)  
 > License: GPL-3.0
@@ -15,7 +15,7 @@
 | Role-based locals | Configurable list (`admin@`, `info@`, …) |
 | Optional SMTP / catch-all | **Off by default**; never sends mail; no deliverability guarantee |
 | Caching + jobs | SQLite |
-| Bulk CSV | Streaming, concurrent, cancellable |
+| Bulk CSV | Bounded-memory streaming batches, concurrent, cancellable (size-capped) |
 | MCP tools | 9 tools over STDIO + Streamable HTTP |
 
 **Important:** `valid_domain` means the domain looks mail-capable. It does **not** mean the individual mailbox was confirmed.
@@ -39,23 +39,28 @@ Point your MCP client at that command (see [Client setup](#client-setup)).
 
 ```bash
 cp .env.example .env
-# set OPENVERIFY_HTTP_AUTH_TOKEN for any non-local exposure
+# Loopback (default OPENVERIFY_HTTP_HOST=127.0.0.1): token optional
+# Non-loopback (e.g. 0.0.0.0): OPENVERIFY_HTTP_AUTH_TOKEN is mandatory or startup fails
 npm run build
 node dist/index.js --transport http
 ```
 
 Endpoints:
 
-- MCP: `POST /mcp` (Streamable HTTP)
-- `GET /health`, `GET /ready`, `GET /version`
+- MCP: `POST /mcp` (Streamable HTTP) — Bearer auth when token configured / required
+- `GET /health`, `GET /ready`, `GET /version` — liveness only; no secrets
+
+Remote exposure also needs **HTTPS** (terminate TLS at a reverse proxy) and a strong token.
 
 ## Docker
 
 ```bash
+# Required: set a token (Compose fails if OPENVERIFY_HTTP_AUTH_TOKEN is unset)
+echo 'OPENVERIFY_HTTP_AUTH_TOKEN=change-me-to-a-long-random-value' >> .env
 docker compose up --build
 ```
 
-Data persists in the `openverify-data` volume. Do not bake secrets into the image.
+Data persists in the `openverify-data` volume. Do not bake secrets into the image. Image/compose are provided for deployment convenience; treat remote use as requiring auth + TLS review.
 
 ## MCP tools
 
@@ -95,10 +100,16 @@ After `npm run build`, Cursor/Gemini can use:
 
 See [`.env.example`](.env.example). Key variables:
 
-- `OPENVERIFY_TRANSPORT` — `stdio` \| `http` \| `both`
-- `OPENVERIFY_HTTP_AUTH_TOKEN` — Bearer token for HTTP MCP
+- `OPENVERIFY_TRANSPORT` — `stdio` \| `http` \| `both` (STDIO needs no HTTP token)
+- `OPENVERIFY_HTTP_HOST` — default `127.0.0.1` (loopback); `0.0.0.0` requires auth token
+- `OPENVERIFY_HTTP_AUTH_TOKEN` — Bearer for MCP; required for non-loopback HTTP
+- `OPENVERIFY_CSV_BATCH_SIZE` — streaming batch size (default 100, cap 1000)
+- `OPENVERIFY_MAX_CSV_BYTES` — max CSV bytes accepted (default 100 MiB)
+- `OPENVERIFY_CONCURRENCY` — validation concurrency
 - `OPENVERIFY_SMTP_ENABLED` — default `false`
 - `OPENVERIFY_LOG_EMAILS` — default `false` (redact emails in logs)
+
+CSV jobs stream in bounded batches (read → parse → batch → validate → ordered write), support cancellation, preserve row order/columns, and sanitize formula-like cells. Cancellation stops new batches, flushes completed output, and marks the job `cancelled`.
 
 ## Documentation
 

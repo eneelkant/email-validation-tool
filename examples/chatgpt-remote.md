@@ -13,11 +13,19 @@ export OPENVERIFY_ALLOWED_HOSTS='your.domain.example'
 npm run build && node dist/index.js --transport http
 ```
 
-Or: `docker compose up`.
+Or with Compose (token required because the container binds `0.0.0.0`):
+
+```bash
+echo 'OPENVERIFY_HTTP_AUTH_TOKEN=generate-a-long-random-token' >> .env
+docker compose up --build
+```
+
+If `OPENVERIFY_HTTP_AUTH_TOKEN` is missing, the process **refuses to start** (fail-closed).
 
 ## 2. Expose HTTPS
 
-Terminate TLS in front of port 8787. Forward `/mcp`, `/health`, `/ready`, `/version`.
+Terminate TLS at a reverse proxy in front of port 8787. Forward `/mcp`, `/health`, `/ready`, `/version`.
+Do not expose plain HTTP on the public internet.
 
 ## 3. ChatGPT configuration
 
@@ -29,6 +37,6 @@ In ChatGPT custom / MCP connector settings (wording varies by product surface):
 
 ## Notes
 
-- Compatibility depends on ChatGPT’s current MCP client support — verify against OpenAI’s latest docs before claiming production use.
+- This guide has **not** been end-to-end verified inside the ChatGPT product UI in this repository’s automated suite — confirm against OpenAI’s current MCP docs for your account.
 - Do not expose an unauthenticated MCP endpoint on the public internet.
 - `valid_domain` results do **not** prove an individual mailbox exists.

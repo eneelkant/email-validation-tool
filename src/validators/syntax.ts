@@ -74,6 +74,8 @@ export function validateSyntax(raw: string): SyntaxParseResult {
     // Allow common atom characters including + and !
     if (!/^[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]+$/.test(local)) {
       // Soft-fail only if clearly broken control chars
+      // Reject whitespace / separators / ASCII controls in unquoted local-parts
+      // eslint-disable-next-line no-control-regex -- intentional control-char check
       if (/[\s<>()[\]\\,;:\x00-\x1f]/.test(local)) {
         reason_codes.push('LOCAL_INVALID_CHARS');
         return invalid(email, trimmed, local, domain, reason_codes);

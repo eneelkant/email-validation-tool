@@ -52,13 +52,13 @@ export async function validateEmail(
   if (disposable) reason_codes.push('DISPOSABLE_DOMAIN');
   if (role) reason_codes.push('ROLE_BASED');
 
-  let smtp_status = await (async () => {
+  const smtp_status = await (async () => {
     const wantSmtp = options.enableSmtp ?? config.smtpEnabled;
     if (!wantSmtp) return diagnoseSmtp(syntax.normalized_email, []);
     return diagnoseSmtp(syntax.normalized_email, dns.mx_hosts);
   })();
 
-  let catch_all_status = await (async () => {
+  const catch_all_status = await (async () => {
     const want = options.enableCatchAll ?? config.catchAllEnabled;
     if (!want) return detectCatchAll(syntax.domain, []);
     return detectCatchAll(syntax.domain, dns.mx_hosts);

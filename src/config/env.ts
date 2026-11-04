@@ -38,6 +38,7 @@ const EnvSchema = z.object({
     .nonnegative()
     .default(86400),
   OPENVERIFY_MAX_BATCH_SIZE: z.coerce.number().int().positive().default(500),
+  OPENVERIFY_CSV_BATCH_SIZE: z.coerce.number().int().positive().max(1000).default(100),
   OPENVERIFY_MAX_CSV_BYTES: z.coerce.number().int().positive().default(104_857_600),
   OPENVERIFY_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   OPENVERIFY_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
@@ -72,6 +73,7 @@ export type AppConfig = {
   cacheTtlSeconds: number;
   domainCacheTtlSeconds: number;
   maxBatchSize: number;
+  csvBatchSize: number;
   maxCsvBytes: number;
   rateLimitWindowMs: number;
   rateLimitMax: number;
@@ -134,6 +136,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     cacheTtlSeconds: parsed.OPENVERIFY_CACHE_TTL_SECONDS,
     domainCacheTtlSeconds: parsed.OPENVERIFY_DOMAIN_CACHE_TTL_SECONDS,
     maxBatchSize: parsed.OPENVERIFY_MAX_BATCH_SIZE,
+    csvBatchSize: Math.min(1000, parsed.OPENVERIFY_CSV_BATCH_SIZE),
     maxCsvBytes: parsed.OPENVERIFY_MAX_CSV_BYTES,
     rateLimitWindowMs: parsed.OPENVERIFY_RATE_LIMIT_WINDOW_MS,
     rateLimitMax: parsed.OPENVERIFY_RATE_LIMIT_MAX,

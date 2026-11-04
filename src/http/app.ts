@@ -6,7 +6,7 @@ import rateLimit from 'express-rate-limit';
 import type { Express, Request, Response } from 'express';
 import { getConfig } from '../config/env.js';
 import { createOpenVerifyServer } from '../mcp/server.js';
-import { requireHttpAuth } from '../security/auth.js';
+import { assertHttpAuthConfig, requireHttpAuth } from '../security/auth.js';
 import { getLogger } from '../utils/logger.js';
 import { closeDb, getDb } from '../database/db.js';
 
@@ -14,6 +14,9 @@ const log = getLogger('http');
 
 export function createHttpApp(): Express {
   const cfg = getConfig();
+  // Defense in depth: refuse to build an HTTP app for non-loopback binds without a token,
+  // even if a caller bypasses startHttpServer().
+  assertHttpAuthConfig(cfg);
 
   const app = createMcpExpressApp({
     host: cfg.httpHost,
@@ -76,6 +79,8 @@ export function createHttpApp(): Express {
 
 export async function startHttpServer(): Promise<{ close: () => Promise<void> }> {
   const cfg = getConfig();
+  // Fail closed before binding: non-loopback HTTP requires a bearer token.
+  assertHttpAuthConfig(cfg);
   const app = createHttpApp();
 
   const server = await new Promise<import('node:http').Server>((resolve, reject) => {
@@ -84,7 +89,12 @@ export async function startHttpServer(): Promise<{ close: () => Promise<void> }>
   });
 
   log.info(
-    { host: cfg.httpHost, port: cfg.httpPort, path: cfg.mcpPath },
+    {
+      host: cfg.httpHost,
+      port: cfg.httpPort,
+      path: cfg.mcpPath,
+      auth_required: Boolean(cfg.httpAuthToken),
+    },
     'HTTP MCP server listening',
   );
 

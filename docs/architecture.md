@@ -17,12 +17,25 @@ src/
 
 ## Transports
 
-- **STDIO** — local MCP clients (Cursor, Claude Desktop/Code, Gemini CLI). Logs → stderr only.
+- **STDIO** — local MCP clients (Cursor, Claude Desktop/Code, Gemini CLI). Logs → stderr only. No HTTP auth.
 - **Streamable HTTP** — remote MCP via official SDK (`createMcpHandler` + Express). Endpoint default `/mcp`.
+  - Loopback bind: token optional.
+  - Non-loopback bind: token mandatory (startup fail-closed).
+
+## CSV pipeline
+
+Bounded-memory streaming:
+
+`CSV Read Stream → CSV Parser → Bounded Batch Buffer → Email Validation → Ordered CSV Writer`
+
+- Configurable `OPENVERIFY_CSV_BATCH_SIZE` (capped at 1000).
+- Preserves input row order and original columns; appends validation columns.
+- Respects write backpressure; supports cancellation between batches.
+- File size limited by `OPENVERIFY_MAX_CSV_BYTES` (not unlimited).
 
 ## Persistence
 
-SQLite stores validation/domain caches, jobs, errors, settings. CSV inputs/outputs stay on the filesystem under configured directories.
+SQLite stores validation/domain caches, jobs, errors, settings. CSV inputs/outputs stay on the filesystem under configured directories (not embedded in SQLite).
 
 ## Extension
 

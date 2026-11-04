@@ -20,11 +20,9 @@ async function main(): Promise<void> {
   const idx = process.argv.indexOf('--url');
   const url = idx >= 0 ? process.argv[idx + 1] : DEFAULT_URL;
   if (!url) throw new Error('--url requires a value');
-  // eslint-disable-next-line no-console
   console.error(`Updating disposable domains from ${url} ...`);
   const meta = await updateDisposableDomainsFromUrl(url);
   loadDisposableDomains(true);
-  // eslint-disable-next-line no-console
   console.error(JSON.stringify({ ...meta, ...getDisposableMeta() }, null, 2));
 }
 
