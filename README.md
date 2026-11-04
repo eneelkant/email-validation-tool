@@ -114,7 +114,12 @@ CSV jobs stream in bounded batches (read → parse → batch → validate → or
 ## Documentation
 
 - [Architecture](docs/architecture.md)
+- [MCP client setup](docs/mcp-client-setup.md)
+- [Security configuration](docs/security-config.md)
 - [Validation statuses](docs/validation-statuses.md)
+- [Validation limitations](docs/validation-limitations.md)
+- [Bulk CSV](docs/bulk-csv.md)
+- [Troubleshooting](docs/troubleshooting.md)
 - [Security policy](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)
 - [Changelog](CHANGELOG.md)
