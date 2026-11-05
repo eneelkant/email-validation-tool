@@ -24,10 +24,14 @@ const EnvSchema = z.object({
   OPENVERIFY_ALLOWED_HOSTS: z.string().optional().default('127.0.0.1,localhost'),
   OPENVERIFY_CORS_ORIGINS: z.string().optional().default(''),
   OPENVERIFY_DATA_DIR: z.string().default('./data/runtime'),
+  // File path, or ":memory:" for process-lifetime SQLite (free-tier / no disk).
   OPENVERIFY_DB_PATH: z.string().default('./data/runtime/openverify.sqlite'),
   OPENVERIFY_DISPOSABLE_PATH: z.string().default('./data/disposable-domains.txt'),
   OPENVERIFY_UPLOAD_DIR: z.string().default('./data/uploads'),
   OPENVERIFY_OUTPUT_DIR: z.string().default('./data/runtime/output'),
+  // When true: treat storage as ephemeral (free-tier Render). Enables upload cleanup
+  // after CSV jobs and advertises storage=ephemeral on /health. Does not remove SQLite.
+  OPENVERIFY_EPHEMERAL_STORAGE: bool(false),
   OPENVERIFY_DNS_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   OPENVERIFY_DNS_SERVERS: z.string().optional().default(''),
   OPENVERIFY_CONCURRENCY: z.coerce.number().int().positive().default(8),
@@ -72,6 +76,7 @@ export type AppConfig = {
   disposablePath: string;
   uploadDir: string;
   outputDir: string;
+  ephemeralStorage: boolean;
   dnsTimeoutMs: number;
   dnsServers: string[];
   concurrency: number;
@@ -116,8 +121,19 @@ function splitCsv(value: string): string[] {
     .filter(Boolean);
 }
 
+/** True for SQLite in-memory targets that must not be path-resolved or mkdir'd. */
+export function isMemoryDbPath(dbPath: string): boolean {
+  const v = dbPath.trim();
+  return v === ':memory:' || v.startsWith('file:memdb');
+}
+
 function resolvePath(p: string): string {
+  if (isMemoryDbPath(p)) return p.trim();
   return path.isAbsolute(p) ? p : path.resolve(process.cwd(), p);
+}
+
+function ensureDir(dir: string): void {
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 }
 
 let cached: AppConfig | undefined;
@@ -156,6 +172,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     disposablePath: resolvePath(parsed.OPENVERIFY_DISPOSABLE_PATH),
     uploadDir: resolvePath(parsed.OPENVERIFY_UPLOAD_DIR),
     outputDir: resolvePath(parsed.OPENVERIFY_OUTPUT_DIR),
+    ephemeralStorage: parsed.OPENVERIFY_EPHEMERAL_STORAGE,
     dnsTimeoutMs: parsed.OPENVERIFY_DNS_TIMEOUT_MS,
     dnsServers: splitCsv(parsed.OPENVERIFY_DNS_SERVERS ?? ''),
     concurrency: parsed.OPENVERIFY_CONCURRENCY,
@@ -181,12 +198,20 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     roleLocalParts: DEFAULT_ROLE_LOCAL_PARTS,
   };
 
-  for (const dir of [config.dataDir, config.uploadDir, config.outputDir, path.dirname(config.dbPath)]) {
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  for (const dir of [config.dataDir, config.uploadDir, config.outputDir]) {
+    ensureDir(dir);
+  }
+  if (!isMemoryDbPath(config.dbPath)) {
+    ensureDir(path.dirname(config.dbPath));
   }
 
   cached = config;
   return config;
+}
+
+/** Describe DB backend for health/ops (no secrets). */
+export function describeDbBackend(dbPath: string = getConfig().dbPath): 'memory' | 'file' {
+  return isMemoryDbPath(dbPath) ? 'memory' : 'file';
 }
 
 export function getConfig(): AppConfig {
