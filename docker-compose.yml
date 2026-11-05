@@ -4,12 +4,20 @@
 # OPENVERIFY_HTTP_AUTH_TOKEN is REQUIRED (fail-closed at process startup).
 # Put the token in a local .env file (never commit real secrets).
 #
-# Example:
+# Example (MCP only):
 #   echo 'OPENVERIFY_HTTP_AUTH_TOKEN=change-me-to-a-long-random-value' >> .env
 #   docker compose up --build
 #
+# Example (MailSure website API for GitHub Pages):
+#   OPENVERIFY_HTTP_AUTH_TOKEN=...                 # required (protects /mcp)
+#   OPENVERIFY_WEBSITE_API_ENABLED=true
+#   OPENVERIFY_CORS_ORIGINS=https://eneelkant.github.io
+#   OPENVERIFY_ALLOWED_HOSTS=localhost,127.0.0.1,your.api.hostname
+#   Then set public/js/config.js API_BASE_URL to https://your.api.hostname
+#
 # Prefer TLS termination at a reverse proxy for any remote exposure.
 # Health checks: GET /health /ready /version (no secrets).
+# Website verify routes (when enabled): POST /api/verify /api/verify/batch
 
 services:
   openverify:
@@ -23,9 +31,18 @@ services:
       # Required: empty token will cause the container to exit on startup.
       OPENVERIFY_HTTP_AUTH_TOKEN: ${OPENVERIFY_HTTP_AUTH_TOKEN:?Set OPENVERIFY_HTTP_AUTH_TOKEN in .env for Compose}
       OPENVERIFY_ALLOWED_HOSTS: ${OPENVERIFY_ALLOWED_HOSTS:-localhost,127.0.0.1}
+      OPENVERIFY_CORS_ORIGINS: ${OPENVERIFY_CORS_ORIGINS:-}
+      OPENVERIFY_WEBSITE_API_ENABLED: ${OPENVERIFY_WEBSITE_API_ENABLED:-false}
+      OPENVERIFY_WEBSITE_RATE_LIMIT_WINDOW_MS: ${OPENVERIFY_WEBSITE_RATE_LIMIT_WINDOW_MS:-60000}
+      OPENVERIFY_WEBSITE_RATE_LIMIT_MAX: ${OPENVERIFY_WEBSITE_RATE_LIMIT_MAX:-30}
+      OPENVERIFY_WEBSITE_MAX_BATCH_SIZE: ${OPENVERIFY_WEBSITE_MAX_BATCH_SIZE:-50}
       OPENVERIFY_LOG_LEVEL: info
       OPENVERIFY_SMTP_ENABLED: "false"
       OPENVERIFY_CSV_BATCH_SIZE: ${OPENVERIFY_CSV_BATCH_SIZE:-100}
+      OPENVERIFY_DATA_DIR: /data
+      OPENVERIFY_DB_PATH: /data/openverify.sqlite
+      OPENVERIFY_UPLOAD_DIR: /data/uploads
+      OPENVERIFY_OUTPUT_DIR: /data/output
     volumes:
       - openverify-data:/data
     restart: unless-stopped

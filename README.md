@@ -122,7 +122,13 @@ Static site sources live in [`public/`](public/). Workflow: [`.github/workflows/
 2. Merge to `main` (or run the workflow manually after merge)
 3. Confirm the **Deploy MailSure Pages** Action is green before treating the site as live
 
-By default the Pages build has an empty `API_BASE_URL` — the UI explains that the backend is unavailable and **never invents results**. To power browser verify, self-host OpenVerify HTTP with `OPENVERIFY_WEBSITE_API_ENABLED=true` and a CORS allowlist; details in [docs/mailsure-website.md](docs/mailsure-website.md). MCP is **not** exposed as public REST; the optional website API is verify-only (`/api/verify`, `/api/verify/batch`) plus existing `/health`.
+By default the Pages build has an empty `API_BASE_URL` in [`public/js/config.js`](public/js/config.js) — the UI shows a **single** backend-unavailable banner and **never invents results**. To power browser verify:
+
+1. Self-host OpenVerify HTTP with `OPENVERIFY_TRANSPORT=http`, `OPENVERIFY_WEBSITE_API_ENABLED=true`, and `OPENVERIFY_CORS_ORIGINS=https://eneelkant.github.io` (see [`.env.example`](.env.example) / Docker Compose).
+2. Confirm `GET /health` reports `"website_api": true`.
+3. Set `API_BASE_URL` in `public/js/config.js` to that origin (e.g. `https://api.example.com` or `http://127.0.0.1:8787` for local).
+
+There is no hosted cloud API in this repo — leave `API_BASE_URL` empty until you operate a backend. MCP is **not** exposed as public REST; the optional website API is verify-only (`/api/verify`, `/api/verify/batch`) plus existing `/health`. Full steps: [docs/mailsure-website.md](docs/mailsure-website.md).
 
 ## Documentation
 

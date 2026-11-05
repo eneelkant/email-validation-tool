@@ -23,6 +23,64 @@
     return apiBase().length > 0;
   }
 
+  /**
+   * Required ValidationResult fields from OpenVerify (see src/types/results.ts).
+   * Reject incomplete/malformed payloads instead of rendering fake success.
+   */
+  function assertValidationResult(value, label) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw Object.assign(
+        new Error("Invalid " + label + ": backend did not return a ValidationResult object."),
+        { code: "invalid_response" },
+      );
+    }
+    const required = [
+      "email",
+      "normalized_email",
+      "syntax_valid",
+      "smtp_status",
+      "catch_all_status",
+      "overall_status",
+      "confidence",
+      "reason_codes",
+      "checked_at",
+    ];
+    for (const key of required) {
+      if (!(key in value)) {
+        throw Object.assign(
+          new Error("Invalid " + label + ": missing field '" + key + "'."),
+          { code: "invalid_response" },
+        );
+      }
+    }
+    if (!Array.isArray(value.reason_codes)) {
+      throw Object.assign(
+        new Error("Invalid " + label + ": reason_codes must be an array."),
+        { code: "invalid_response" },
+      );
+    }
+    if (typeof value.syntax_valid !== "boolean") {
+      throw Object.assign(
+        new Error("Invalid " + label + ": syntax_valid must be a boolean."),
+        { code: "invalid_response" },
+      );
+    }
+    return value;
+  }
+
+  async function parseJsonResponse(res) {
+    const text = await res.text();
+    if (!text) return {};
+    try {
+      return JSON.parse(text);
+    } catch (_err) {
+      throw Object.assign(
+        new Error("Backend returned non-JSON (HTTP " + res.status + ")."),
+        { code: "invalid_response", status: res.status },
+      );
+    }
+  }
+
   async function checkHealth() {
     if (!isConfigured()) {
       return { ok: false, reason: "not_configured" };
@@ -36,7 +94,10 @@
       if (!res.ok) {
         return { ok: false, reason: "unhealthy", status: res.status };
       }
-      const body = await res.json();
+      const body = await res.json().catch(() => null);
+      if (!body || typeof body !== "object") {
+        return { ok: false, reason: "invalid_health" };
+      }
       return { ok: true, body };
     } catch (_err) {
       return { ok: false, reason: "unreachable" };
@@ -49,21 +110,28 @@
         code: "not_configured",
       });
     }
-    const res = await fetch(apiBase() + "/api/verify", {
-      method: "POST",
-      mode: "cors",
-      credentials: "omit",
-      headers: { "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify({ email }),
-    });
-    const body = await res.json().catch(() => ({}));
+    let res;
+    try {
+      res = await fetch(apiBase() + "/api/verify", {
+        method: "POST",
+        mode: "cors",
+        credentials: "omit",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ email }),
+      });
+    } catch (_err) {
+      throw Object.assign(new Error("Verification backend is unreachable."), {
+        code: "unreachable",
+      });
+    }
+    const body = await parseJsonResponse(res);
     if (!res.ok) {
       throw Object.assign(new Error(body.detail || body.error || "Verification failed"), {
         code: body.error || "http_error",
         status: res.status,
       });
     }
-    return body.result;
+    return assertValidationResult(body.result, "verify response");
   }
 
   async function verifyBatch(emails) {
@@ -72,21 +140,36 @@
         code: "not_configured",
       });
     }
-    const res = await fetch(apiBase() + "/api/verify/batch", {
-      method: "POST",
-      mode: "cors",
-      credentials: "omit",
-      headers: { "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify({ emails }),
-    });
-    const body = await res.json().catch(() => ({}));
+    let res;
+    try {
+      res = await fetch(apiBase() + "/api/verify/batch", {
+        method: "POST",
+        mode: "cors",
+        credentials: "omit",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ emails }),
+      });
+    } catch (_err) {
+      throw Object.assign(new Error("Verification backend is unreachable."), {
+        code: "unreachable",
+      });
+    }
+    const body = await parseJsonResponse(res);
     if (!res.ok) {
       throw Object.assign(new Error(body.detail || body.error || "Batch verification failed"), {
         code: body.error || "http_error",
         status: res.status,
       });
     }
-    return body.results;
+    if (!Array.isArray(body.results)) {
+      throw Object.assign(
+        new Error("Invalid batch response: expected results array."),
+        { code: "invalid_response" },
+      );
+    }
+    return body.results.map(function (row, i) {
+      return assertValidationResult(row, "batch result[" + i + "]");
+    });
   }
 
   function formatNullable(v) {
@@ -199,6 +282,17 @@
     );
   }
 
+  /** Reasons that belong on the persistent #backend-status banner only. */
+  function isConnectionReason(reason) {
+    return (
+      reason === "not_configured" ||
+      reason === "unreachable" ||
+      reason === "unhealthy" ||
+      reason === "invalid_health" ||
+      reason === "website_api_disabled"
+    );
+  }
+
   global.MailSureApi = {
     isConfigured,
     checkHealth,
@@ -207,5 +301,7 @@
     renderResults,
     escapeHtml,
     unavailableMessage,
+    assertValidationResult,
+    isConnectionReason,
   };
 })(window);

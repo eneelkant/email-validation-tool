@@ -21,7 +21,7 @@ In the GitHub repository:
 
 1. **Settings → Pages**
 2. **Build and deployment → Source:** GitHub Actions
-3. Merge this branch to `main` (or run **Deploy MailSure Pages** via `workflow_dispatch` after merge)
+3. Merge to `main` (or run **Deploy MailSure Pages** via `workflow_dispatch` after merge)
 4. Confirm the Actions run for `Deploy MailSure Pages` is green before treating the site as deployed
 
 Site URL: `https://eneelkant.github.io/email-validation-tool/`  
@@ -29,38 +29,110 @@ Assets use **relative** paths so the project-pages base path works.
 
 Until the workflow has succeeded on `main`, do not claim production Pages deployment.
 
-## Frontend configuration
+## Frontend configuration — where to set the backend URL
 
-Edit `public/js/config.js`:
+Edit **`public/js/config.js`** → `API_BASE_URL`:
 
 ```js
 API_BASE_URL: "" // e.g. "https://your-api.example.com" or "http://127.0.0.1:8787"
 ```
 
-- Empty `API_BASE_URL` (default for Pages): UI shows a clear **backend unavailable / not configured** message and **never fabricates** ValidationResult data.
+| Value | Behavior |
+|-------|----------|
+| `""` (default for Pages) | Single **backend unavailable / not configured** banner; **never fabricates** ValidationResult data |
+| `"http://127.0.0.1:8787"` | Local end-to-end against `npm run start:http` with website API enabled |
+| `"https://your-api.example.com"` | Production browser verify against your self-hosted origin |
+
 - Set `API_BASE_URL` only to an origin you operate with the website API enabled and CORS allowlisted.
+- No secrets, bearer tokens, or fake API URLs in frontend source.
+- After changing `config.js` for Pages, merge to `main` so the Pages workflow publishes it.
+
+### Banner ownership (duplicate-warning fix)
+
+The verify panel has two banners with distinct jobs:
+
+| Element | Role |
+|---------|------|
+| `#backend-status` | Persistent connection state (not configured / unreachable / website API disabled / connected) |
+| `#verify-feedback` | Form-only messages (empty input, CSV errors, HTTP/API errors after a live backend, bulk success) |
+
+Connection warnings are shown **once** in `#backend-status`. Submit handlers do not repeat the same unavailable message in `#verify-feedback`.
 
 ## Website API (optional, self-hosted)
 
-GitHub Pages cannot run Node. To power the verify UI:
+GitHub Pages cannot run Node. There is **no hosted MailSure cloud API** in this repository. To power the verify UI you must run OpenVerify HTTP yourself.
+
+### Local development (practical)
+
+Terminal A — API:
 
 ```bash
-# .env (never commit secrets)
+cp .env.example .env
+# edit .env:
+#   OPENVERIFY_TRANSPORT=http
+#   OPENVERIFY_HTTP_HOST=127.0.0.1
+#   OPENVERIFY_WEBSITE_API_ENABLED=true
+#   OPENVERIFY_CORS_ORIGINS=http://127.0.0.1:3000
+npm run build
+npm run start:http
+```
+
+Terminal B — static site:
+
+```bash
+npx --yes serve public -l 3000
+```
+
+Point `public/js/config.js` at the API:
+
+```js
+API_BASE_URL: "http://127.0.0.1:8787"
+```
+
+Open `http://127.0.0.1:3000`, confirm the connected banner, then use Single / Bulk verify.
+
+### Production deploy options (operator-hosted)
+
+| Option | Notes |
+|--------|--------|
+| **Docker Compose** | See `docker-compose.yml`. Requires `OPENVERIFY_HTTP_AUTH_TOKEN` (protects `/mcp`). Set `OPENVERIFY_WEBSITE_API_ENABLED=true`, `OPENVERIFY_CORS_ORIGINS=https://eneelkant.github.io`, and `OPENVERIFY_ALLOWED_HOSTS` to include your public API hostname. Terminate TLS at a reverse proxy. |
+| **Bare Node on a VPS** | Same env as Compose; bind `0.0.0.0` only behind HTTPS reverse proxy with a strong MCP token. |
+| **Platform container** | Same image/`Dockerfile`; inject env vars; persist `/data` for SQLite. |
+
+SQLite paths default under `OPENVERIFY_DATA_DIR` / `OPENVERIFY_DB_PATH` (Compose uses the `openverify-data` volume).
+
+Recommended production `.env` (values are examples — generate your own token):
+
+```bash
 OPENVERIFY_TRANSPORT=http
-OPENVERIFY_HTTP_HOST=127.0.0.1   # or 0.0.0.0 with OPENVERIFY_HTTP_AUTH_TOKEN set for MCP
+OPENVERIFY_HTTP_HOST=0.0.0.0
+OPENVERIFY_HTTP_PORT=8787
+OPENVERIFY_HTTP_AUTH_TOKEN=<generate-a-long-random-secret>
+OPENVERIFY_ALLOWED_HOSTS=localhost,127.0.0.1,api.example.com
 OPENVERIFY_WEBSITE_API_ENABLED=true
 OPENVERIFY_CORS_ORIGINS=https://eneelkant.github.io
 OPENVERIFY_WEBSITE_RATE_LIMIT_MAX=30
 OPENVERIFY_WEBSITE_MAX_BATCH_SIZE=50
 ```
 
-Endpoints (when enabled):
+Then:
+
+1. Deploy/start the process and confirm `GET https://api.example.com/health` returns `{ "status":"ok", "website_api": true }`.
+2. Set `public/js/config.js` → `API_BASE_URL: "https://api.example.com"`.
+3. Merge to `main` so Pages picks up the config.
+4. From the live site, verify a known-invalid address (e.g. `not-an-email`) and confirm a real `ValidationResult` table row — never a mocked success.
+
+Until step 1 succeeds from the public internet, **do not claim live Pages ↔ API E2E**.
+
+### Endpoints (when enabled)
 
 | Method | Path | Notes |
 |--------|------|--------|
-| `GET` | `/health` | Existing liveness; includes `website_api` boolean |
+| `GET` | `/health` | Liveness; includes `website_api` boolean |
 | `POST` | `/api/verify` | Body `{ "email": string }` → `{ result: ValidationResult }` |
 | `POST` | `/api/verify/batch` | Body `{ "emails": string[] }` (size-capped) → `{ results, count }` |
+
+Frontend wiring: single form → `POST /api/verify`; bulk CSV → `POST /api/verify/batch`. Invalid/missing result shapes are rejected in the browser (no fabricated rows). CSV download + formula sanitization remain client-side.
 
 ### Safety notes
 
@@ -68,9 +140,9 @@ Endpoints (when enabled):
 - Separate, stricter rate limits for `/api/*`.
 - Batch size capped (`OPENVERIFY_WEBSITE_MAX_BATCH_SIZE`, max 100).
 - JSON body limit remains 1mb on the Express app.
-- CORS uses `OPENVERIFY_CORS_ORIGINS` allowlist (set your Pages origin for browser calls).
+- CORS uses `OPENVERIFY_CORS_ORIGINS` allowlist as **full origins** (e.g. `https://eneelkant.github.io`). The HTTP app derives hostnames for the MCP Origin guard (which is hostname-only); do not put bare hostnames alone if you also need browser `Access-Control-Allow-Origin` reflection.
 - MCP remains on `/mcp` with existing bearer auth rules; not aliased under `/api`.
-- Non-loopback HTTP still requires `OPENVERIFY_HTTP_AUTH_TOKEN` for MCP startup fail-closed behavior.
+- Non-loopback HTTP still requires `OPENVERIFY_HTTP_AUTH_TOKEN` for MCP startup fail-closed behavior. The website verify routes themselves do not require that bearer token; rely on CORS + rate limits + reverse-proxy controls.
 
 ### Blocker / limitation
 
@@ -90,19 +162,12 @@ The UI table mirrors `ValidationResult` in `src/types/results.ts`:
 - Copy states clearly: **no mailbox-existence claims**.
 - Privacy/Terms pages are **drafts marked for legal review**.
 
-## Local preview of static files
+## Manual checklist for operators
 
-```bash
-# any static server from public/
-npx --yes serve public
-```
-
-For end-to-end verify against a local API:
-
-```bash
-OPENVERIFY_TRANSPORT=http \
-OPENVERIFY_WEBSITE_API_ENABLED=true \
-OPENVERIFY_CORS_ORIGINS=http://127.0.0.1:3000 \
-npm run start:http
-# point public/js/config.js API_BASE_URL at http://127.0.0.1:8787
-```
+1. Copy `.env.example` → `.env`; never commit secrets.
+2. Enable website API + CORS as above; keep MCP admin off the public `/api` surface.
+3. `npm run build && npm run start:http` (or `docker compose up --build`).
+4. `curl -s http://127.0.0.1:8787/health` → `website_api: true`.
+5. Set `API_BASE_URL` in `public/js/config.js`.
+6. Preview locally with `npx serve public`, then publish Pages via merge to `main`.
+7. Confirm a real verify call from the browser; if the API is not deployed, leave `API_BASE_URL` empty.
