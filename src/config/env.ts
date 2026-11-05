@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { config as loadDotenv } from 'dotenv';
 import { z } from 'zod';
@@ -29,8 +30,10 @@ const EnvSchema = z.object({
   OPENVERIFY_DISPOSABLE_PATH: z.string().default('./data/disposable-domains.txt'),
   OPENVERIFY_UPLOAD_DIR: z.string().default('./data/uploads'),
   OPENVERIFY_OUTPUT_DIR: z.string().default('./data/runtime/output'),
-  // When true: treat storage as ephemeral (free-tier Render). Enables upload cleanup
+  // When true: treat storage as ephemeral (free-tier / serverless). Enables upload cleanup
   // after CSV jobs and advertises storage=ephemeral on /health. Does not remove SQLite.
+  // On read-only deploy roots (e.g. AWS Lambda / Enzonic `/var/task`), remaps writable
+  // paths to os.tmpdir() so startup never mkdir's under the package directory.
   OPENVERIFY_EPHEMERAL_STORAGE: bool(false),
   OPENVERIFY_DNS_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   OPENVERIFY_DNS_SERVERS: z.string().optional().default(''),
@@ -114,6 +117,11 @@ const DEFAULT_ROLE_LOCAL_PARTS = [
   'webmaster',
 ];
 
+/** Lambda / Enzonic-style package roots — read-only; never mkdir here when ephemeral. */
+const READONLY_DEPLOY_ROOTS = ['/var/task', '/var/runtime'] as const;
+
+let ephemeralRootCache: string | undefined;
+
 function splitCsv(value: string): string[] {
   return value
     .split(',')
@@ -132,14 +140,71 @@ function resolvePath(p: string): string {
   return path.isAbsolute(p) ? p : path.resolve(process.cwd(), p);
 }
 
+/** True when an absolute path is under a known serverless read-only package root. */
+export function isReadonlyDeployPath(absPath: string): boolean {
+  if (isMemoryDbPath(absPath)) return false;
+  const normalized = path.resolve(absPath);
+  return READONLY_DEPLOY_ROOTS.some(
+    (root) => normalized === root || normalized.startsWith(`${root}${path.sep}`),
+  );
+}
+
+/**
+ * Process-scoped writable root for ephemeral remaps (tmpdir — not /var/task).
+ * Stable for the process lifetime so CSV/upload paths stay coherent.
+ */
+export function getEphemeralRuntimeRoot(): string {
+  if (!ephemeralRootCache) {
+    ephemeralRootCache = path.join(os.tmpdir(), `mailsure-ephemeral-${process.pid}`);
+  }
+  return ephemeralRootCache;
+}
+
+/** Test helper — clear cached ephemeral root between suites. */
+export function resetEphemeralRuntimeRootCache(): void {
+  ephemeralRootCache = undefined;
+}
+
+/**
+ * When ephemeral, relocate paths that would land under read-only deploy roots
+ * (e.g. Enzonic/Lambda `/var/task/...`) into os.tmpdir(). Leave Render `/data`,
+ * local project dirs, and explicit writable absolute paths unchanged.
+ */
+export function relocateEphemeralPath(
+  resolved: string,
+  ephemeral: boolean,
+  relativeUnderTemp: string,
+): string {
+  if (!ephemeral || isMemoryDbPath(resolved)) return resolved;
+  if (!isReadonlyDeployPath(resolved)) return resolved;
+  return path.join(getEphemeralRuntimeRoot(), relativeUnderTemp);
+}
+
+/**
+ * Disposable dataset: prefer an existing packaged file even under /var/task (read-only OK).
+ * Only relocate when the file is missing and the path is not writable (ephemeral + readonly root).
+ */
+export function resolveDisposablePath(resolved: string, ephemeral: boolean): string {
+  if (!ephemeral || isMemoryDbPath(resolved)) return resolved;
+  if (!isReadonlyDeployPath(resolved)) return resolved;
+  if (existsSync(resolved)) return resolved;
+  return path.join(getEphemeralRuntimeRoot(), 'disposable-domains.txt');
+}
+
 function ensureDir(dir: string): void {
+  if (isReadonlyDeployPath(dir)) {
+    throw new Error(
+      `Refusing to create directory under read-only deploy root: ${dir}. ` +
+        `Set OPENVERIFY_EPHEMERAL_STORAGE=true (auto-remaps to temp) or point OPENVERIFY_* paths at a writable location.`,
+    );
+  }
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 }
 
 let cached: AppConfig | undefined;
 
 /**
- * Resolve listen port. Cloud platforms (Render, etc.) inject `PORT`; prefer it when set
+ * Resolve listen port. Cloud platforms (Render, Enzonic, etc.) inject `PORT`; prefer it when set
  * so Docker/`OPENVERIFY_HTTP_PORT` defaults keep working locally without conflicting.
  * Env var names stay OPENVERIFY_* for compatibility — do not rename them.
  */
@@ -155,11 +220,47 @@ export function resolveHttpPort(
   return openverifyHttpPort;
 }
 
+/**
+ * Resolve HTTP bind host. When the platform injects `PORT` and the operator did not
+ * set OPENVERIFY_HTTP_HOST, bind `0.0.0.0` (Render / Enzonic / containers). Explicit
+ * OPENVERIFY_HTTP_HOST always wins. Local defaults stay 127.0.0.1 when PORT is unset.
+ */
+export function resolveHttpHost(
+  env: NodeJS.ProcessEnv,
+  configuredHost: string,
+): string {
+  const explicit = env.OPENVERIFY_HTTP_HOST;
+  if (explicit !== undefined && explicit !== '') {
+    return configuredHost;
+  }
+  const port = env.PORT;
+  if (port !== undefined && port !== '') {
+    return '0.0.0.0';
+  }
+  return configuredHost;
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const parsed = EnvSchema.parse(env);
+  const ephemeralStorage = parsed.OPENVERIFY_EPHEMERAL_STORAGE;
+
+  const rawDataDir = resolvePath(parsed.OPENVERIFY_DATA_DIR);
+  const rawDbPath = resolvePath(parsed.OPENVERIFY_DB_PATH);
+  const rawDisposable = resolvePath(parsed.OPENVERIFY_DISPOSABLE_PATH);
+  const rawUpload = resolvePath(parsed.OPENVERIFY_UPLOAD_DIR);
+  const rawOutput = resolvePath(parsed.OPENVERIFY_OUTPUT_DIR);
+
+  const dataDir = relocateEphemeralPath(rawDataDir, ephemeralStorage, 'runtime');
+  const dbPath = isMemoryDbPath(rawDbPath)
+    ? rawDbPath
+    : relocateEphemeralPath(rawDbPath, ephemeralStorage, 'runtime/openverify.sqlite');
+  const disposablePath = resolveDisposablePath(rawDisposable, ephemeralStorage);
+  const uploadDir = relocateEphemeralPath(rawUpload, ephemeralStorage, 'uploads');
+  const outputDir = relocateEphemeralPath(rawOutput, ephemeralStorage, 'runtime/output');
+
   const config: AppConfig = {
     transport: parsed.OPENVERIFY_TRANSPORT,
-    httpHost: parsed.OPENVERIFY_HTTP_HOST,
+    httpHost: resolveHttpHost(env, parsed.OPENVERIFY_HTTP_HOST),
     httpPort: resolveHttpPort(env, parsed.OPENVERIFY_HTTP_PORT),
     mcpPath: parsed.OPENVERIFY_MCP_PATH.startsWith('/')
       ? parsed.OPENVERIFY_MCP_PATH
@@ -167,12 +268,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     httpAuthToken: parsed.OPENVERIFY_HTTP_AUTH_TOKEN ?? '',
     allowedHosts: splitCsv(parsed.OPENVERIFY_ALLOWED_HOSTS ?? ''),
     corsOrigins: splitCsv(parsed.OPENVERIFY_CORS_ORIGINS ?? ''),
-    dataDir: resolvePath(parsed.OPENVERIFY_DATA_DIR),
-    dbPath: resolvePath(parsed.OPENVERIFY_DB_PATH),
-    disposablePath: resolvePath(parsed.OPENVERIFY_DISPOSABLE_PATH),
-    uploadDir: resolvePath(parsed.OPENVERIFY_UPLOAD_DIR),
-    outputDir: resolvePath(parsed.OPENVERIFY_OUTPUT_DIR),
-    ephemeralStorage: parsed.OPENVERIFY_EPHEMERAL_STORAGE,
+    dataDir,
+    dbPath,
+    disposablePath,
+    uploadDir,
+    outputDir,
+    ephemeralStorage,
     dnsTimeoutMs: parsed.OPENVERIFY_DNS_TIMEOUT_MS,
     dnsServers: splitCsv(parsed.OPENVERIFY_DNS_SERVERS ?? ''),
     concurrency: parsed.OPENVERIFY_CONCURRENCY,
@@ -198,11 +299,17 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     roleLocalParts: DEFAULT_ROLE_LOCAL_PARTS,
   };
 
+  // Never mkdir under /var/task (guarded inside ensureDir). Ephemeral remaps land in tmpdir.
   for (const dir of [config.dataDir, config.uploadDir, config.outputDir]) {
     ensureDir(dir);
   }
   if (!isMemoryDbPath(config.dbPath)) {
     ensureDir(path.dirname(config.dbPath));
+  }
+  // Disposable: only ensure parent when we may need to create the seed file.
+  // Packaged read-only files under /var/task are used as-is without mkdir.
+  if (!existsSync(config.disposablePath) && !isReadonlyDeployPath(config.disposablePath)) {
+    ensureDir(path.dirname(config.disposablePath));
   }
 
   cached = config;

@@ -40,6 +40,8 @@ SQLite stores validation/domain caches, jobs, errors, settings. CSV inputs/outpu
 
 On free-tier Render (`OPENVERIFY_EPHEMERAL_STORAGE=true`, no persistent disk) the same SQLite schema runs on the container filesystem or `:memory:` — data lasts for the process/instance only and is wiped on redeploy. MCP CSV uploads under the upload directory are deleted after the job finishes. Website single/bulk verify does not need durable storage (browser CSV parse + `/api/verify/batch` + client download).
 
+On Enzonic/Lambda-style hosts the package root (`/var/task`) is read-only. With `OPENVERIFY_EPHEMERAL_STORAGE=true`, any configured path under `/var/task` or `/var/runtime` is remapped to `os.tmpdir()` before directories are created — validation, SQLite caches, and MCP CSV jobs keep working without persistent storage. Explicit writable paths (e.g. Render `/data`) are left alone.
+
 ## Extension
 
 The validation orchestrator is transport-agnostic. The optional MailSure website API (`OPENVERIFY_WEBSITE_API_ENABLED`) mounts verify-only routes that call the same engine without exposing MCP admin tools. See [mailsure-website.md](mailsure-website.md).

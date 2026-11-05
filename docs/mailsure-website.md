@@ -96,6 +96,7 @@ Open `http://127.0.0.1:3000`, confirm the connected banner, then use Single / Bu
 | Option | Notes |
 |--------|--------|
 | **Render Blueprint (`mailsure-api`)** | Root [`render.yaml`](../render.yaml). Docker, health `/health`, website API + Pages CORS, MCP token generated, **no persistent disk** (free tier; `/data` ephemeral). Operator steps: [render-deploy.md](render-deploy.md). Set `OPENVERIFY_ALLOWED_HOSTS` to the **real** Render hostname after create. Never invent the URL; leave `API_BASE_URL` empty until `/health` works. |
+| **Enzonic Deploy** | Serverless package root is `/var/task` (read-only). Set `OPENVERIFY_EPHEMERAL_STORAGE=true` so runtime dirs remap to `os.tmpdir()` (never `mkdir` under `/var/task`). Prefer platform `PORT`; unset `OPENVERIFY_HTTP_HOST` (auto `0.0.0.0`) or set it explicitly. Requires `OPENVERIFY_HTTP_AUTH_TOKEN`, website API + CORS as below. See [troubleshooting.md](troubleshooting.md#enzonic--lambda-var-task-enoent). |
 | **Docker Compose** | See `docker-compose.yml`. Requires `OPENVERIFY_HTTP_AUTH_TOKEN` (protects `/mcp`). Set `OPENVERIFY_WEBSITE_API_ENABLED=true`, `OPENVERIFY_CORS_ORIGINS=https://eneelkant.github.io`, and `OPENVERIFY_ALLOWED_HOSTS` to include your public API hostname. Terminate TLS at a reverse proxy. |
 | **Bare Node on a VPS** | Same env as Compose; bind `0.0.0.0` only behind HTTPS reverse proxy with a strong MCP token. |
 | **Other platform container** | Same image/`Dockerfile`; inject env vars; prefer platform `PORT`; persist `/data` for SQLite. |
@@ -115,6 +116,24 @@ OPENVERIFY_CORS_ORIGINS=https://eneelkant.github.io
 OPENVERIFY_WEBSITE_RATE_LIMIT_MAX=30
 OPENVERIFY_WEBSITE_MAX_BATCH_SIZE=50
 ```
+
+### Enzonic Deploy (website API + CORS)
+
+Exact env vars for a verify-only API on Enzonic (read-only `/var/task` package):
+
+```bash
+OPENVERIFY_TRANSPORT=http
+OPENVERIFY_EPHEMERAL_STORAGE=true
+OPENVERIFY_WEBSITE_API_ENABLED=true
+OPENVERIFY_CORS_ORIGINS=https://eneelkant.github.io
+OPENVERIFY_HTTP_AUTH_TOKEN=<generate-a-long-random-secret>
+OPENVERIFY_ALLOWED_HOSTS=localhost,127.0.0.1,<your-enzonic-api-host>
+# Optional: OPENVERIFY_DB_PATH=:memory:
+# Optional: OPENVERIFY_HTTP_HOST=0.0.0.0
+# Platform PORT is used when set; if OPENVERIFY_HTTP_HOST is unset, bind is 0.0.0.0
+```
+
+Keep `public/js/config.js` → `API_BASE_URL` empty until `GET /health` succeeds on the real Enzonic HTTPS origin, then set it to that origin only (no trailing slash). Never invent or hardcode a deploy URL.
 
 Then:
 

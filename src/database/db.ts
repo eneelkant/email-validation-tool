@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
-import { getConfig, isMemoryDbPath } from '../config/env.js';
+import { getConfig, isMemoryDbPath, isReadonlyDeployPath } from '../config/env.js';
 import type { DomainCheckResult, JobStatus, ValidationResult } from '../types/results.js';
 import { getLogger } from '../utils/logger.js';
 import { MIGRATIONS } from './migrations.js';
@@ -25,7 +25,14 @@ export function getDb(dbPath?: string): Database.Database {
   const cfg = getConfig();
   const target = dbPath ?? cfg.dbPath;
   if (!isMemoryDbPath(target)) {
-    mkdirSync(path.dirname(target), { recursive: true });
+    const dir = path.dirname(target);
+    if (isReadonlyDeployPath(dir)) {
+      throw new Error(
+        `Refusing to open SQLite under read-only deploy root: ${target}. ` +
+          `Set OPENVERIFY_EPHEMERAL_STORAGE=true or OPENVERIFY_DB_PATH=:memory: / a writable path.`,
+      );
+    }
+    mkdirSync(dir, { recursive: true });
   }
   const db = new Database(target);
   // WAL is for on-disk DBs; in-memory uses MEMORY journal.

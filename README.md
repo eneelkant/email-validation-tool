@@ -75,8 +75,9 @@ Blueprint: [`render.yaml`](render.yaml). Operator steps: [docs/render-deploy.md]
 - Enables website API + CORS for `https://eneelkant.github.io`
 - Generates `OPENVERIFY_HTTP_AUTH_TOKEN`; you must set `OPENVERIFY_ALLOWED_HOSTS` to include the real Render hostname
 - **Free-tier / no disk:** SQLite retained for in-process caches + MCP CSV jobs under ephemeral `/data` (`OPENVERIFY_EPHEMERAL_STORAGE=true`; wiped on redeploy). Optional `OPENVERIFY_DB_PATH=:memory:`. Website bulk CSV remains client-side.
+- **Enzonic / Lambda (`/var/task`):** with `OPENVERIFY_EPHEMERAL_STORAGE=true`, paths under the read-only package root remap to `os.tmpdir()` (no `mkdir` under `/var/task`). See [docs/mailsure-website.md](docs/mailsure-website.md#enzonic-deploy-website-api--cors).
 
-**Do not invent a Render URL.** Leave [`public/js/config.js`](public/js/config.js) `API_BASE_URL` empty until you have confirmed `GET /health` on the HTTPS origin Render assigns. This repository does not claim a live backend deploy.
+**Do not invent a Render/Enzonic URL.** Leave [`public/js/config.js`](public/js/config.js) `API_BASE_URL` empty until you have confirmed `GET /health` on the HTTPS origin your host assigns. This repository does not claim a live backend deploy.
 
 ## MCP tools
 
