@@ -122,12 +122,29 @@ function resolvePath(p: string): string {
 
 let cached: AppConfig | undefined;
 
+/**
+ * Resolve listen port. Cloud platforms (Render, etc.) inject `PORT`; prefer it when set
+ * so Docker/`OPENVERIFY_HTTP_PORT` defaults keep working locally without conflicting.
+ * Env var names stay OPENVERIFY_* for compatibility — do not rename them.
+ */
+export function resolveHttpPort(
+  env: NodeJS.ProcessEnv,
+  openverifyHttpPort: number,
+): number {
+  const raw = env.PORT;
+  if (raw !== undefined && raw !== '') {
+    const n = Number(raw);
+    if (Number.isInteger(n) && n > 0) return n;
+  }
+  return openverifyHttpPort;
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const parsed = EnvSchema.parse(env);
   const config: AppConfig = {
     transport: parsed.OPENVERIFY_TRANSPORT,
     httpHost: parsed.OPENVERIFY_HTTP_HOST,
-    httpPort: parsed.OPENVERIFY_HTTP_PORT,
+    httpPort: resolveHttpPort(env, parsed.OPENVERIFY_HTTP_PORT),
     mcpPath: parsed.OPENVERIFY_MCP_PATH.startsWith('/')
       ? parsed.OPENVERIFY_MCP_PATH
       : `/${parsed.OPENVERIFY_MCP_PATH}`,

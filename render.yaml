@@ -1,0 +1,73 @@
+# MailSure API — Render Blueprint
+#
+# Service name: mailsure-api
+# Product: MailSure / MailSure MCP
+# GitHub repo stays: eneelkant/email-validation-tool
+#
+# This Blueprint does NOT invent a live Render URL and does NOT deploy by itself.
+# Create the Blueprint in the Render Dashboard (see docs/render-deploy.md).
+# After deploy, set public/js/config.js API_BASE_URL only to the real HTTPS origin
+# Render shows you — leave it empty until then.
+#
+# Env var names remain OPENVERIFY_* for compatibility with local/.env/Docker configs.
+
+services:
+  - type: web
+    name: mailsure-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    branch: main
+    healthCheckPath: /health
+    # Render terminates HTTPS and injects PORT; the app prefers process.env.PORT when set.
+    envVars:
+      - key: OPENVERIFY_TRANSPORT
+        value: http
+      - key: OPENVERIFY_HTTP_HOST
+        value: "0.0.0.0"
+      - key: OPENVERIFY_WEBSITE_API_ENABLED
+        value: "true"
+      - key: OPENVERIFY_CORS_ORIGINS
+        value: https://eneelkant.github.io
+      # Prefer Render-injected PORT (dynamic). OPENVERIFY_HTTP_PORT remains the local/Docker default.
+      - key: OPENVERIFY_MCP_PATH
+        value: /mcp
+      - key: OPENVERIFY_DATA_DIR
+        value: /data
+      - key: OPENVERIFY_DB_PATH
+        value: /data/openverify.sqlite
+      - key: OPENVERIFY_UPLOAD_DIR
+        value: /data/uploads
+      - key: OPENVERIFY_OUTPUT_DIR
+        value: /data/output
+      - key: OPENVERIFY_DISPOSABLE_PATH
+        value: /app/data/disposable-domains.txt
+      - key: OPENVERIFY_RATE_LIMIT_WINDOW_MS
+        value: "60000"
+      - key: OPENVERIFY_RATE_LIMIT_MAX
+        value: "120"
+      - key: OPENVERIFY_WEBSITE_RATE_LIMIT_WINDOW_MS
+        value: "60000"
+      - key: OPENVERIFY_WEBSITE_RATE_LIMIT_MAX
+        value: "30"
+      - key: OPENVERIFY_WEBSITE_MAX_BATCH_SIZE
+        value: "50"
+      - key: OPENVERIFY_LOG_LEVEL
+        value: info
+      - key: OPENVERIFY_SMTP_ENABLED
+        value: "false"
+      - key: OPENVERIFY_LOG_EMAILS
+        value: "false"
+      # Secrets / operator-supplied — never hardcode credentials in this file.
+      # Bearer token required because OPENVERIFY_HTTP_HOST=0.0.0.0 (MCP fail-closed).
+      - key: OPENVERIFY_HTTP_AUTH_TOKEN
+        generateValue: true
+      # After first deploy, set to: localhost,127.0.0.1,<your-service.onrender.com>
+      # (and any custom domain). Required for Host / DNS-rebinding guards + Render health checks.
+      - key: OPENVERIFY_ALLOWED_HOSTS
+        sync: false
+    # SQLite + uploads/output need persistence across deploys (paid plans; free tier is ephemeral).
+    disk:
+      name: mailsure-data
+      mountPath: /data
+      sizeGB: 1

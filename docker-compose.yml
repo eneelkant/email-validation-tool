@@ -1,4 +1,5 @@
-# OpenVerify MCP — Docker Compose
+# MailSure MCP / mailsure-api — Docker Compose
+# OPENVERIFY_* names kept for compatibility (do not rename blindly).
 #
 # HTTP binds to 0.0.0.0 inside the container, so a non-empty
 # OPENVERIFY_HTTP_AUTH_TOKEN is REQUIRED (fail-closed at process startup).
@@ -14,8 +15,10 @@
 #   OPENVERIFY_CORS_ORIGINS=https://eneelkant.github.io
 #   OPENVERIFY_ALLOWED_HOSTS=localhost,127.0.0.1,your.api.hostname
 #   Then set public/js/config.js API_BASE_URL to https://your.api.hostname
+#   (leave empty until you have a real origin — never invent a URL)
 #
 # Prefer TLS termination at a reverse proxy for any remote exposure.
+# For Render Blueprint deploy, see docs/render-deploy.md and root render.yaml.
 # Health checks: GET /health /ready /version (no secrets).
 # Website verify routes (when enabled): POST /api/verify /api/verify/batch
 

@@ -1,4 +1,4 @@
-# Bulk CSV processing — OpenVerify MCP
+# Bulk CSV processing — MailSure MCP
 
 Tool: `verify_csv`. Pipeline (bounded memory):
 
@@ -30,7 +30,7 @@ Then poll `get_validation_job` / `cancel_validation_job` when `wait` is false.
 
 ### First-column fallback
 
-With headers `name,contact` and no `email_column`, OpenVerify validates the `name` column (first header) instead of failing. Pass `email_column: "contact"` when the address column is nonstandard.
+With headers `name,contact` and no `email_column`, MailSure MCP validates the `name` column (first header) instead of failing. Pass `email_column: "contact"` when the address column is nonstandard.
 
 ## Sample CSV
 

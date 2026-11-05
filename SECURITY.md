@@ -1,8 +1,8 @@
-# Security Policy — OpenVerify MCP
+# Security Policy — MailSure MCP
 
 ## Threat model (summary)
 
-OpenVerify MCP validates email addresses using local syntax checks, DNS/MX lookups, a local disposable-domain dataset, optional SMTP diagnostics, and CSV processing. It is designed to run **self-hosted** without paid verification APIs.
+MailSure MCP validates email addresses using local syntax checks, DNS/MX lookups, a local disposable-domain dataset, optional SMTP diagnostics, and CSV processing. It is designed to run **self-hosted** without paid verification APIs.
 
 ### In scope risks
 

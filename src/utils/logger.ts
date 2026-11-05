@@ -19,9 +19,9 @@ export function getLogger(name?: string): pino.Logger {
     }
     root = pino(
       {
-        name: 'openverify',
+        name: 'mailsure',
         level,
-        base: { service: 'openverify-mcp' },
+        base: { service: 'mailsure-api', product: 'MailSure MCP' },
         redact: logEmails
           ? undefined
           : {

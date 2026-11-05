@@ -1,4 +1,4 @@
-# Troubleshooting — OpenVerify MCP
+# Troubleshooting — MailSure MCP
 
 ## Process will not start (HTTP)
 
@@ -13,7 +13,7 @@
 1. Confirm `npm run build` produced `dist/index.js`.
 2. Use an **absolute** path in Claude Desktop configs.
 3. Ensure the client’s cwd can resolve relative `dist/…` (Cursor/Gemini).
-4. Check client logs for stderr from OpenVerify (`OPENVERIFY_LOG_LEVEL=debug`).
+4. Check client logs for stderr from MailSure MCP (`OPENVERIFY_LOG_LEVEL=debug`).
 5. Never write banners to stdout in wrappers — stdout is the MCP wire.
 
 ## HTTP 401 / 403

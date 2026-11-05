@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "openverify": {
+    "mailsure": {
       "command": "node",
       "args": ["dist/index.js", "--transport", "stdio"],
       "env": {

@@ -85,7 +85,11 @@ describe('HTTP health + MCP endpoint', () => {
   it('serves /health /ready /version', async () => {
     const health = await fetch(`${base}/health`);
     expect(health.status).toBe(200);
-    expect(await health.json()).toMatchObject({ status: 'ok' });
+    expect(await health.json()).toMatchObject({
+      status: 'ok',
+      service: 'mailsure-api',
+      product: 'MailSure MCP',
+    });
 
     const ready = await fetch(`${base}/ready`);
     expect(ready.status).toBe(200);
@@ -93,7 +97,8 @@ describe('HTTP health + MCP endpoint', () => {
     const version = await fetch(`${base}/version`);
     expect(version.status).toBe(200);
     const body = (await version.json()) as { name: string };
-    expect(body.name).toBe('openverify-mcp');
+    expect(body.name).toBe('mailsure-mcp');
+    expect(body).toMatchObject({ product: 'MailSure MCP', service: 'mailsure-api' });
   });
 
   it('rejects unauthorized Host header and does not reach MCP', async () => {
@@ -211,7 +216,7 @@ describe('HTTP health + MCP endpoint', () => {
     expect(payload.jsonrpc).toBe('2.0');
     expect(payload.id).toBe(1);
     expect(payload.error).toBeUndefined();
-    expect(payload.result?.serverInfo.name).toBe('openverify-mcp');
+    expect(payload.result?.serverInfo.name).toBe('mailsure-mcp');
     expect(payload.result?.protocolVersion).toBeTruthy();
     expect(payload.result?.capabilities).toBeTruthy();
   });

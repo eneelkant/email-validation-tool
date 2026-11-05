@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * OpenVerify MCP entrypoint.
- * Supports --transport stdio|http|both (or OPENVERIFY_TRANSPORT).
+ * MailSure MCP entrypoint.
+ * Supports --transport stdio|http|both (or OPENVERIFY_TRANSPORT — env names kept for compatibility).
  * STDIO mode never writes banners to stdout.
  */
 import { loadConfig } from './config/env.js';

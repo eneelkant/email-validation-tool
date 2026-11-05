@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a problem with OpenVerify MCP
+about: Report a problem with MailSure MCP
 title: "[bug] "
 labels: bug
 ---
@@ -15,7 +15,7 @@ A clear description of what went wrong.
 **Environment**
 - OS:
 - Node version:
-- OpenVerify version / commit:
+- MailSure MCP version / commit:
 
 **Steps to reproduce**
 1.

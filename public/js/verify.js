@@ -24,7 +24,7 @@
   }
 
   /**
-   * Required ValidationResult fields from OpenVerify (see src/types/results.ts).
+   * Required ValidationResult fields from MailSure MCP (see src/types/results.ts).
    * Reject incomplete/malformed payloads instead of rendering fake success.
    */
   function assertValidationResult(value, label) {
@@ -269,7 +269,7 @@
     if (reason === "not_configured") {
       return (
         "Verification backend is not configured for this static site. " +
-        "Set API_BASE_URL in js/config.js to a self-hosted OpenVerify server with " +
+        "Set API_BASE_URL in js/config.js to a self-hosted MailSure API (mailsure-api) with " +
         "OPENVERIFY_WEBSITE_API_ENABLED=true, or use the MCP tools locally. " +
         "Results are never fabricated."
       );
