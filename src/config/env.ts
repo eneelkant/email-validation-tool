@@ -42,6 +42,11 @@ const EnvSchema = z.object({
   OPENVERIFY_MAX_CSV_BYTES: z.coerce.number().int().positive().default(104_857_600),
   OPENVERIFY_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   OPENVERIFY_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
+  // MailSure website API (verify-only; off by default — does not expose MCP admin tools)
+  OPENVERIFY_WEBSITE_API_ENABLED: bool(false),
+  OPENVERIFY_WEBSITE_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
+  OPENVERIFY_WEBSITE_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(30),
+  OPENVERIFY_WEBSITE_MAX_BATCH_SIZE: z.coerce.number().int().positive().max(100).default(50),
   OPENVERIFY_SMTP_ENABLED: bool(false),
   OPENVERIFY_SMTP_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   OPENVERIFY_SMTP_CONCURRENCY: z.coerce.number().int().positive().default(2),
@@ -77,6 +82,10 @@ export type AppConfig = {
   maxCsvBytes: number;
   rateLimitWindowMs: number;
   rateLimitMax: number;
+  websiteApiEnabled: boolean;
+  websiteRateLimitWindowMs: number;
+  websiteRateLimitMax: number;
+  websiteMaxBatchSize: number;
   smtpEnabled: boolean;
   smtpTimeoutMs: number;
   smtpConcurrency: number;
@@ -140,6 +149,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     maxCsvBytes: parsed.OPENVERIFY_MAX_CSV_BYTES,
     rateLimitWindowMs: parsed.OPENVERIFY_RATE_LIMIT_WINDOW_MS,
     rateLimitMax: parsed.OPENVERIFY_RATE_LIMIT_MAX,
+    websiteApiEnabled: parsed.OPENVERIFY_WEBSITE_API_ENABLED,
+    websiteRateLimitWindowMs: parsed.OPENVERIFY_WEBSITE_RATE_LIMIT_WINDOW_MS,
+    websiteRateLimitMax: parsed.OPENVERIFY_WEBSITE_RATE_LIMIT_MAX,
+    websiteMaxBatchSize: Math.min(100, parsed.OPENVERIFY_WEBSITE_MAX_BATCH_SIZE),
     smtpEnabled: parsed.OPENVERIFY_SMTP_ENABLED,
     smtpTimeoutMs: parsed.OPENVERIFY_SMTP_TIMEOUT_MS,
     smtpConcurrency: parsed.OPENVERIFY_SMTP_CONCURRENCY,

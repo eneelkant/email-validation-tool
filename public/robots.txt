@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://eneelkant.github.io/email-validation-tool/sitemap.xml

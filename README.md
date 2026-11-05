@@ -2,7 +2,10 @@
 
 **Free, open-source, self-hosted email verification MCP server** for local validation, bounded bulk CSV processing, DNS/MX checks, and disposable-email detection — without paid API credits.
 
+**MailSure** (*Email Verification Made Simple.*) is the static product website in [`public/`](public/), deployed via GitHub Pages. See [MailSure website](docs/mailsure-website.md).
+
 > Repository: [eneelkant/email-validation-tool](https://github.com/eneelkant/email-validation-tool)  
+> Website: [eneelkant.github.io/email-validation-tool](https://eneelkant.github.io/email-validation-tool/) (after Pages workflow succeeds on `main`)  
 > License: GPL-3.0
 
 ## What it does
@@ -111,8 +114,19 @@ See [`.env.example`](.env.example). Key variables:
 
 CSV jobs stream in bounded batches (read → parse → batch → validate → ordered write), support cancellation, preserve row order/columns, and sanitize formula-like cells. Cancellation stops new batches, flushes completed output, and marks the job `cancelled`.
 
+## MailSure website (GitHub Pages)
+
+Static site sources live in [`public/`](public/). Workflow: [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml).
+
+1. Repo **Settings → Pages → Source: GitHub Actions**
+2. Merge to `main` (or run the workflow manually after merge)
+3. Confirm the **Deploy MailSure Pages** Action is green before treating the site as live
+
+By default the Pages build has an empty `API_BASE_URL` — the UI explains that the backend is unavailable and **never invents results**. To power browser verify, self-host OpenVerify HTTP with `OPENVERIFY_WEBSITE_API_ENABLED=true` and a CORS allowlist; details in [docs/mailsure-website.md](docs/mailsure-website.md). MCP is **not** exposed as public REST; the optional website API is verify-only (`/api/verify`, `/api/verify/batch`) plus existing `/health`.
+
 ## Documentation
 
+- [MailSure website](docs/mailsure-website.md)
 - [Architecture](docs/architecture.md)
 - [MCP client setup](docs/mcp-client-setup.md)
 - [Security configuration](docs/security-config.md)

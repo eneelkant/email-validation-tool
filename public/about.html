@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>About MailSure — Email Verification Made Simple</title>
+    <meta
+      name="description"
+      content="Learn how MailSure and OpenVerify MCP provide free, self-hosted email verification with honest domain-level results."
+    />
+    <link rel="canonical" href="https://eneelkant.github.io/email-validation-tool/about.html" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="About MailSure" />
+    <meta
+      property="og:description"
+      content="MailSure is the public face of OpenVerify MCP — free, open-source email verification."
+    />
+    <meta property="og:url" content="https://eneelkant.github.io/email-validation-tool/about.html" />
+    <meta property="og:image" content="https://eneelkant.github.io/email-validation-tool/favicon.svg" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Mono:wght@500;600&family=Source+Sans+3:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="container nav">
+        <a class="brand" href="index.html" aria-label="MailSure home">
+          <span class="brand-mark" aria-hidden="true">MS</span>
+          <span class="brand-name">MailSure</span>
+        </a>
+        <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
+          Menu
+        </button>
+        <ul class="nav-links" id="site-nav">
+          <li><a href="index.html">Home</a></li>
+          <li><a href="about.html" aria-current="page">About</a></li>
+          <li><a href="pricing.html">Pricing</a></li>
+          <li><a href="contact.html">Contact</a></li>
+          <li><a href="https://github.com/eneelkant/email-validation-tool">GitHub</a></li>
+        </ul>
+      </div>
+    </header>
+
+    <main id="main" class="container">
+      <header class="page-hero">
+        <h1>About MailSure</h1>
+        <p>Email Verification Made Simple — the product surface for OpenVerify MCP.</p>
+      </header>
+      <div class="prose">
+        <p>
+          <strong>MailSure</strong> is a professional, light-weight website for exploring email verification
+          results from the open-source <strong>OpenVerify MCP</strong> engine in
+          <a href="https://github.com/eneelkant/email-validation-tool">eneelkant/email-validation-tool</a>.
+        </p>
+        <h2>What we verify</h2>
+        <p>
+          Syntax, domain DNS records, MX availability, disposable domains, and role-based local parts.
+          Optional SMTP and catch-all diagnostics exist in the engine but are off by default and never send mail.
+        </p>
+        <h2>What we do not claim</h2>
+        <p>
+          We do not claim that an individual mailbox exists, is monitored, or will accept your message.
+          A <code>valid_domain</code> status means the domain looks mail-capable — nothing more.
+        </p>
+        <h2>Self-hosted by design</h2>
+        <p>
+          Run OpenVerify locally over STDIO or HTTP MCP. Optionally enable a verify-only website API for this
+          static UI. GitHub Pages hosts the frontend only; it cannot run the Node validation server.
+        </p>
+        <p>
+          <a class="btn btn-primary" href="index.html#verify">Try verification</a>
+          <a class="btn btn-secondary" href="https://github.com/eneelkant/email-validation-tool">View source</a>
+        </p>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <div class="footer-grid">
+          <div>
+            <p class="footer-brand">MailSure</p>
+            <p>Email Verification Made Simple. Powered by OpenVerify MCP.</p>
+          </div>
+          <div class="footer-col">
+            <h3>Product</h3>
+            <ul>
+              <li><a href="about.html">About</a></li>
+              <li><a href="pricing.html">Pricing</a></li>
+              <li><a href="contact.html">Contact</a></li>
+            </ul>
+          </div>
+          <div class="footer-col">
+            <h3>Legal</h3>
+            <ul>
+              <li><a href="privacy.html">Privacy</a></li>
+              <li><a href="terms.html">Terms</a></li>
+              <li><a href="https://github.com/eneelkant/email-validation-tool/blob/main/LICENSE">License</a></li>
+            </ul>
+          </div>
+        </div>
+        <p class="footer-meta">© MailSure / OpenVerify MCP contributors. GPL-3.0.</p>
+      </div>
+    </footer>
+    <script src="js/config.js" defer></script>
+    <script src="js/app.js" defer></script>
+  </body>
+</html>

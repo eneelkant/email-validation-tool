@@ -9,6 +9,7 @@ import { createOpenVerifyServer } from '../mcp/server.js';
 import { assertHttpAuthConfig, requireHttpAuth } from '../security/auth.js';
 import { getLogger } from '../utils/logger.js';
 import { closeDb, getDb } from '../database/db.js';
+import { mountWebsiteApi } from './website-api.js';
 
 const log = getLogger('http');
 
@@ -46,7 +47,11 @@ export function createHttpApp(): Express {
 
   // Health endpoints — unauthenticated for orchestrators; no sensitive data.
   app.get('/health', (_req: Request, res: Response) => {
-    res.json({ status: 'ok', service: 'openverify-mcp' });
+    res.json({
+      status: 'ok',
+      service: 'openverify-mcp',
+      website_api: cfg.websiteApiEnabled,
+    });
   });
 
   app.get('/ready', (_req: Request, res: Response) => {
@@ -64,8 +69,12 @@ export function createHttpApp(): Express {
       name: 'openverify-mcp',
       version: cfg.version,
       product: 'OpenVerify MCP',
+      website_api: cfg.websiteApiEnabled,
     });
   });
+
+  // MailSure verify-only API (optional). Never mounts MCP admin tools.
+  mountWebsiteApi(app);
 
   const mcpHandler = createMcpHandler(() => createOpenVerifyServer());
   const nodeHandler = toNodeHandler(mcpHandler);

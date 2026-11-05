@@ -4,10 +4,18 @@ All notable changes to OpenVerify MCP will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- MailSure static website in `public/` (GitHub Pages) with verify UI, about, pricing, contact, privacy/terms drafts
+- Optional verify-only website API (`OPENVERIFY_WEBSITE_API_ENABLED`): `POST /api/verify`, `POST /api/verify/batch`
+- GitHub Actions workflow `deploy-pages.yml` for Pages deployment of `public/`
+- Docs: `docs/mailsure-website.md`
+
 ### Security
 
 - HTTP auth fail-closed: non-loopback binds require `OPENVERIFY_HTTP_AUTH_TOKEN` before listen
 - Docker Compose requires an explicit auth token via `.env` interpolation
+- Website API off by default; separate rate/batch limits; does not expose MCP admin tools
 
 ### Fixed
 
@@ -17,6 +25,7 @@ All notable changes to OpenVerify MCP will be documented in this file.
 ### Changed
 
 - Documented remote HTTPS + token requirements; CSV batch/size limits and cancellation behavior
+- `/health` and `/version` include `website_api` flag when reporting status
 
 ## [0.1.0] — 2026-11-03
 

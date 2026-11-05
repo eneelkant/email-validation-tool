@@ -9,10 +9,11 @@ src/
   database/     SQLite + versioned migrations
   processing/   Batch + CSV jobs
   mcp/          MCP server factory + tools + STDIO
-  http/         Express app, health, Streamable HTTP MCP
+  http/         Express app, health, optional MailSure website API, Streamable HTTP MCP
   security/     Auth, path, CSV, host guards
   types/        Shared Zod schemas
   utils/        Logger, concurrency
+public/         MailSure static site (GitHub Pages)
 ```
 
 ## Transports
@@ -39,4 +40,4 @@ SQLite stores validation/domain caches, jobs, errors, settings. CSV inputs/outpu
 
 ## Extension
 
-The validation orchestrator is transport-agnostic so a future Next.js dashboard can call the same engine without redesign.
+The validation orchestrator is transport-agnostic. The optional MailSure website API (`OPENVERIFY_WEBSITE_API_ENABLED`) mounts verify-only routes that call the same engine without exposing MCP admin tools. See [mailsure-website.md](mailsure-website.md).
