@@ -8,7 +8,7 @@
       name="description"
       content="MailSure helps you verify email syntax, domains, MX records, and disposable addresses. Free, open-source, self-hosted. No mailbox-existence claims."
     />
-    <meta name="theme-color" content="#2563eb" />
+    <meta name="theme-color" content="#0b1220" />
     <link rel="canonical" href="https://eneelkant.github.io/email-validation-tool/" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="MailSure" />
@@ -29,7 +29,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Mono:wght@500;600&family=Source+Sans+3:wght@400;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="css/styles.css" />
@@ -57,21 +57,41 @@
           <li><a href="pricing.html">Pricing</a></li>
           <li><a href="contact.html">Contact</a></li>
           <li><a href="https://github.com/eneelkant/email-validation-tool">GitHub</a></li>
+          <li class="nav-cta"><a class="btn btn-primary" href="#verify">Verify</a></li>
         </ul>
       </div>
     </header>
 
     <main id="main">
-      <section class="hero">
+      <section class="hero" aria-labelledby="hero-heading">
         <div class="container">
-          <p class="hero-brand">MailSure</p>
+          <p class="hero-brand" id="hero-heading">MailSure</p>
           <p class="hero-tagline">Email Verification Made Simple.</p>
           <p class="hero-lead">
             Check syntax, domain DNS/MX, disposable domains, and role-based addresses —
             free, open-source, and self-hosted. Domain signals only; we never claim a mailbox exists.
           </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#verify">Start verifying</a>
+            <a class="btn btn-secondary" href="https://github.com/eneelkant/email-validation-tool">View on GitHub</a>
+          </div>
+        </div>
+      </section>
 
-          <div class="hero-panel" id="verify">
+      <section class="verify-section" id="verify" aria-labelledby="verify-heading">
+        <div class="container">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Verification</p>
+              <h2 id="verify-heading">Verify emails</h2>
+              <p class="section-lead">
+                Single checks or bulk CSV — results follow the OpenVerify ValidationResult schema.
+                A live backend is required; this site never invents outcomes.
+              </p>
+            </div>
+          </div>
+
+          <div class="verify-panel">
             <div class="tabs" role="tablist" aria-label="Verification mode">
               <button class="tab" role="tab" id="tab-single" aria-selected="true" aria-controls="panel-single">
                 Single email
@@ -116,7 +136,7 @@
             <div id="verify-feedback" class="banner" hidden role="alert" aria-live="assertive"></div>
             <div id="results" class="results" hidden></div>
             <p style="margin-top: 1rem">
-              <button class="btn btn-secondary" type="button" id="download-csv" hidden>
+              <button class="btn btn-ghost" type="button" id="download-csv" hidden>
                 Download results CSV
               </button>
             </p>
@@ -124,32 +144,43 @@
         </div>
       </section>
 
-      <section class="section section-alt" id="features" aria-labelledby="features-heading">
+      <section class="section" id="features" aria-labelledby="features-heading">
         <div class="container">
-          <h2 id="features-heading">Features</h2>
-          <p class="section-lead">Built on the OpenVerify MCP validation engine — the same checks your agents use.</p>
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Capabilities</p>
+              <h2 id="features-heading">Features</h2>
+              <p class="section-lead">Built on the OpenVerify MCP validation engine — the same checks your agents use.</p>
+            </div>
+          </div>
           <div class="feature-list">
             <article class="feature">
+              <p class="card-label">Syntax</p>
               <h3>Syntax &amp; IDN</h3>
               <p>RFC-aware syntax validation with internationalized domain support.</p>
             </article>
             <article class="feature">
+              <p class="card-label">DNS</p>
               <h3>DNS / MX</h3>
               <p>Domain existence and mail-exchanger lookups with timeouts treated as temporary, not invalid.</p>
             </article>
             <article class="feature">
+              <p class="card-label">Risk</p>
               <h3>Disposable &amp; role</h3>
               <p>Local disposable-domain dataset and configurable role-based local parts.</p>
             </article>
             <article class="feature">
+              <p class="card-label">Scale</p>
               <h3>Bulk CSV</h3>
               <p>Browser-friendly batches here; streaming, bounded MCP CSV jobs for large files.</p>
             </article>
             <article class="feature">
+              <p class="card-label">Agents</p>
               <h3>MCP-native</h3>
               <p>STDIO and Streamable HTTP for Cursor, Claude, Gemini CLI, and more.</p>
             </article>
             <article class="feature">
+              <p class="card-label">Cost</p>
               <h3>No paid credits</h3>
               <p>Self-host the engine. No commercial verification API dependency.</p>
             </article>
@@ -161,10 +192,15 @@
         </div>
       </section>
 
-      <section class="section" id="how-it-works" aria-labelledby="how-heading">
+      <section class="section section-alt" id="how-it-works" aria-labelledby="how-heading">
         <div class="container">
-          <h2 id="how-heading">How it works</h2>
-          <p class="section-lead">One clear path from address to structured result.</p>
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Process</p>
+              <h2 id="how-heading">How it works</h2>
+              <p class="section-lead">One clear path from address to structured result.</p>
+            </div>
+          </div>
           <div class="steps">
             <article class="step">
               <div>
@@ -191,20 +227,28 @@
         </div>
       </section>
 
-      <section class="section section-alt" id="use-cases" aria-labelledby="use-heading">
+      <section class="section" id="use-cases" aria-labelledby="use-heading">
         <div class="container">
-          <h2 id="use-heading">Use cases</h2>
-          <p class="section-lead">Practical cleanup without overstating deliverability.</p>
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Applications</p>
+              <h2 id="use-heading">Use cases</h2>
+              <p class="section-lead">Practical cleanup without overstating deliverability.</p>
+            </div>
+          </div>
           <div class="use-cases">
             <article class="use-case">
+              <p class="card-label">Lists</p>
               <h3>List hygiene</h3>
               <p>Remove obvious syntax errors, dead domains, and disposable addresses before outreach.</p>
             </article>
             <article class="use-case">
+              <p class="card-label">Forms</p>
               <h3>Form quality</h3>
               <p>Catch role inboxes and risky patterns early in signup or lead capture flows.</p>
             </article>
             <article class="use-case">
+              <p class="card-label">Agents</p>
               <h3>Agent workflows</h3>
               <p>Let MCP clients verify addresses inside coding and ops assistants you already use.</p>
             </article>
@@ -212,9 +256,47 @@
         </div>
       </section>
 
-      <section class="section" id="faq" aria-labelledby="faq-heading">
+      <section class="section section-dark" id="mcp" aria-labelledby="mcp-heading">
         <div class="container">
-          <h2 id="faq-heading">FAQ</h2>
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Technology</p>
+              <h2 id="mcp-heading">OpenVerify MCP</h2>
+              <p class="section-lead">
+                MailSure is the product surface for OpenVerify — a self-hosted MCP server for honest,
+                domain-level email verification.
+              </p>
+            </div>
+            <a class="btn btn-secondary" href="https://github.com/eneelkant/email-validation-tool">Repository</a>
+          </div>
+          <div class="mcp-grid">
+            <article class="mcp-card">
+              <p class="card-label">Transports</p>
+              <h3>STDIO &amp; HTTP</h3>
+              <p>Run locally over STDIO or expose Streamable HTTP for remote MCP clients.</p>
+            </article>
+            <article class="mcp-card">
+              <p class="card-label">Tools</p>
+              <h3>verify &amp; verify_csv</h3>
+              <p>Single-address and bounded CSV tools with structured ValidationResult output.</p>
+            </article>
+            <article class="mcp-card">
+              <p class="card-label">Website API</p>
+              <h3>Optional verify API</h3>
+              <p>Enable a verify-only HTTP API for this static UI. Admin MCP tools stay off the public surface.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section-alt" id="faq" aria-labelledby="faq-heading">
+        <div class="container">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Support</p>
+              <h2 id="faq-heading">FAQ</h2>
+            </div>
+          </div>
           <div class="faq-list">
             <article class="faq-item">
               <h3>Does MailSure prove an inbox exists?</h3>
@@ -256,6 +338,7 @@
               <li><a href="about.html">About</a></li>
               <li><a href="pricing.html">Pricing</a></li>
               <li><a href="contact.html">Contact</a></li>
+              <li><a href="index.html#verify">Verify</a></li>
             </ul>
           </div>
           <div class="footer-col">
