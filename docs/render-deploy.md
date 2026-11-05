@@ -23,9 +23,12 @@ Env var **names remain `OPENVERIFY_*`** so local `.env`, Compose, and docs stay 
 
 ## Free-tier / ephemeral data
 
-- Blueprint intentionally omits Render persistent disks (free tier compatible).
-- Paths stay `OPENVERIFY_DATA_DIR=/data`, `OPENVERIFY_DB_PATH=/data/openverify.sqlite`, uploads/output under `/data/…` (created and chowned in the Dockerfile — writable without a mounted disk).
-- Expect empty cache/jobs after every redeploy. Fine for website verify smoke tests; not for durable CSV job history.
+- Blueprint intentionally omits Render persistent disks and paid managed databases (free tier compatible).
+- `OPENVERIFY_EPHEMERAL_STORAGE=true` — `/health` reports `storage: "ephemeral"`; MCP CSV uploads under `/data/uploads` are deleted after the job finishes.
+- Paths stay `OPENVERIFY_DATA_DIR=/data`, `OPENVERIFY_DB_PATH=/data/openverify.sqlite` (or set `:memory:` if you prefer no DB file). Dockerfile creates `/data` writable without a mounted disk.
+- **Why SQLite is retained:** validation/domain caches (optional via TTL) and MCP CSV job tracking (`validation_jobs`) need an in-process store. Auth uses env Bearer tokens — **not** the DB. Website single/bulk verify does not require durable history (bulk CSV parse + result download are browser-side; API is JSON batch).
+- Expect empty cache/jobs after every redeploy/restart. Fine for website verify; not for durable MCP job history.
+- Optional: `OPENVERIFY_DB_PATH=:memory:` for pure process-lifetime SQLite (still wiped on restart).
 - To persist later: add a Render disk on a paid plan and keep the same `/data` mount path (do not invent that until you upgrade).
 
 ## Blueprint creation / retry steps (operator)
@@ -41,7 +44,7 @@ Env var **names remain `OPENVERIFY_*`** so local `.env`, Compose, and docs stay 
 6. Confirm **`OPENVERIFY_HTTP_AUTH_TOKEN`** is generated (`generateValue: true`). Copy it from the dashboard for MCP clients — never commit it.
 7. Create/sync the Blueprint and wait for the first deploy of `mailsure-api` to finish green.
 8. Open the service’s public HTTPS URL (only the one Render shows you). Smoke-check:
-   - `GET /health` → `status: ok`, `service: mailsure-api`, `website_api: true`
+   - `GET /health` → `status: ok`, `service: mailsure-api`, `website_api: true`, `storage: ephemeral`
    - `GET /version` → `product: MailSure MCP`, `name: mailsure-mcp`
    - `POST /api/verify` with `{"email":"not-an-email"}` → real `ValidationResult` (invalid syntax)
    - `POST /mcp` without Bearer → **401** (admin surface protected)

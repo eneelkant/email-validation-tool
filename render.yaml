@@ -38,7 +38,10 @@ services:
       # Prefer Render-injected PORT (dynamic). OPENVERIFY_HTTP_PORT remains the local/Docker default.
       - key: OPENVERIFY_MCP_PATH
         value: /mcp
-      # Ephemeral writable paths (no Render disk). Dockerfile creates /data for user openverify.
+      # Ephemeral writable paths (no Render disk / no paid DB). Dockerfile creates /data.
+      # SQLite is retained for in-process caches + MCP CSV job tracking; it wipes on redeploy.
+      - key: OPENVERIFY_EPHEMERAL_STORAGE
+        value: "true"
       - key: OPENVERIFY_DATA_DIR
         value: /data
       - key: OPENVERIFY_DB_PATH

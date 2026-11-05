@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
-import { getConfig } from '../config/env.js';
+import { getConfig, isMemoryDbPath } from '../config/env.js';
 import type { DomainCheckResult, JobStatus, ValidationResult } from '../types/results.js';
 import { getLogger } from '../utils/logger.js';
 import { MIGRATIONS } from './migrations.js';
@@ -15,16 +15,33 @@ export function emailHash(normalizedEmail: string): string {
   return createHash('sha256').update(normalizedEmail.toLowerCase()).digest('hex');
 }
 
+/**
+ * Open SQLite. Supports file paths and `:memory:` (process-lifetime; free-tier friendly).
+ * Retained intentionally: caches + MCP CSV job tracking need a DB during the process life.
+ * Auth/tokens are NOT stored here. Persistence across redeploys is NOT required on free tier.
+ */
 export function getDb(dbPath?: string): Database.Database {
   if (dbInstance && !dbPath) return dbInstance;
   const cfg = getConfig();
   const target = dbPath ?? cfg.dbPath;
-  mkdirSync(path.dirname(target), { recursive: true });
+  if (!isMemoryDbPath(target)) {
+    mkdirSync(path.dirname(target), { recursive: true });
+  }
   const db = new Database(target);
-  db.pragma('journal_mode = WAL');
+  // WAL is for on-disk DBs; in-memory uses MEMORY journal.
+  db.pragma(isMemoryDbPath(target) ? 'journal_mode = MEMORY' : 'journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   migrate(db);
-  if (!dbPath) dbInstance = db;
+  if (!dbPath) {
+    dbInstance = db;
+    log.info(
+      {
+        backend: isMemoryDbPath(target) ? 'memory' : 'file',
+        ephemeral: cfg.ephemeralStorage,
+      },
+      'SQLite ready',
+    );
+  }
   return db;
 }
 

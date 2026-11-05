@@ -74,7 +74,7 @@ Blueprint: [`render.yaml`](render.yaml). Operator steps: [docs/render-deploy.md]
 - Web service name: **mailsure-api** (Docker, branch `main`, health `/health`)
 - Enables website API + CORS for `https://eneelkant.github.io`
 - Generates `OPENVERIFY_HTTP_AUTH_TOKEN`; you must set `OPENVERIFY_ALLOWED_HOSTS` to include the real Render hostname
-- **Free-tier / no disk:** SQLite and uploads stay under `/data` on the ephemeral container filesystem (wiped on redeploy)
+- **Free-tier / no disk:** SQLite retained for in-process caches + MCP CSV jobs under ephemeral `/data` (`OPENVERIFY_EPHEMERAL_STORAGE=true`; wiped on redeploy). Optional `OPENVERIFY_DB_PATH=:memory:`. Website bulk CSV remains client-side.
 
 **Do not invent a Render URL.** Leave [`public/js/config.js`](public/js/config.js) `API_BASE_URL` empty until you have confirmed `GET /health` on the HTTPS origin Render assigns. This repository does not claim a live backend deploy.
 

@@ -36,7 +36,9 @@ Bounded-memory streaming:
 
 ## Persistence
 
-SQLite stores validation/domain caches, jobs, errors, settings. CSV inputs/outputs stay on the filesystem under configured directories (not embedded in SQLite).
+SQLite stores validation/domain caches, jobs, errors, settings. CSV inputs/outputs stay on the filesystem under configured directories (not embedded in SQLite). Auth tokens are env-only (never in SQLite).
+
+On free-tier Render (`OPENVERIFY_EPHEMERAL_STORAGE=true`, no persistent disk) the same SQLite schema runs on the container filesystem or `:memory:` — data lasts for the process/instance only and is wiped on redeploy. MCP CSV uploads under the upload directory are deleted after the job finishes. Website single/bulk verify does not need durable storage (browser CSV parse + `/api/verify/batch` + client download).
 
 ## Extension
 

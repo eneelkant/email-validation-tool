@@ -4,7 +4,7 @@ import { toNodeHandler } from '@modelcontextprotocol/node';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import type { Express, Request, Response } from 'express';
-import { getConfig } from '../config/env.js';
+import { describeDbBackend, getConfig } from '../config/env.js';
 import { createOpenVerifyServer } from '../mcp/server.js';
 import { assertHttpAuthConfig, requireHttpAuth } from '../security/auth.js';
 import { getLogger } from '../utils/logger.js';
@@ -79,13 +79,19 @@ export function createHttpApp(): Express {
       service: 'mailsure-api',
       product: 'MailSure MCP',
       website_api: cfg.websiteApiEnabled,
+      storage: cfg.ephemeralStorage ? 'ephemeral' : 'persistent',
+      db: describeDbBackend(cfg.dbPath),
     });
   });
 
   app.get('/ready', (_req: Request, res: Response) => {
     try {
       getDb().prepare('SELECT 1 AS ok').get();
-      res.json({ status: 'ready' });
+      res.json({
+        status: 'ready',
+        storage: cfg.ephemeralStorage ? 'ephemeral' : 'persistent',
+        db: describeDbBackend(cfg.dbPath),
+      });
     } catch (err) {
       log.error({ err }, 'Readiness check failed');
       res.status(503).json({ status: 'not_ready' });
@@ -99,6 +105,8 @@ export function createHttpApp(): Express {
       product: 'MailSure MCP',
       service: 'mailsure-api',
       website_api: cfg.websiteApiEnabled,
+      storage: cfg.ephemeralStorage ? 'ephemeral' : 'persistent',
+      db: describeDbBackend(cfg.dbPath),
     });
   });
 

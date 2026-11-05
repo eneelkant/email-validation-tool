@@ -1,4 +1,4 @@
-import { createReadStream, createWriteStream, statSync } from 'node:fs';
+import { createReadStream, createWriteStream, existsSync, statSync, unlinkSync } from 'node:fs';
 import { finished } from 'node:stream/promises';
 import type { Readable } from 'node:stream';
 import { randomUUID } from 'node:crypto';
@@ -123,6 +123,36 @@ function closeQuietly(stream: { destroy?: (err?: Error) => void } | null | undef
     stream.destroy();
   } catch {
     // ignore
+  }
+}
+
+function isPathInsideRoot(candidate: string, root: string): boolean {
+  const resolvedRoot = path.resolve(root);
+  const resolved = path.resolve(candidate);
+  return resolved === resolvedRoot || resolved.startsWith(resolvedRoot + path.sep);
+}
+
+/**
+ * Free-tier / ephemeral mode: remove finished CSV uploads under OPENVERIFY_UPLOAD_DIR.
+ * Keeps MCP output CSV (caller may still read it during this process). Does nothing when
+ * ephemeralStorage is false or the input path is outside the upload root.
+ */
+export function cleanupEphemeralUpload(job: JobRow): boolean {
+  const cfg = getConfig();
+  if (!cfg.ephemeralStorage) return false;
+  if (!job.input_path) return false;
+  if (!isPathInsideRoot(job.input_path, cfg.uploadDir)) return false;
+  try {
+    if (!existsSync(job.input_path)) return false;
+    unlinkSync(job.input_path);
+    log.info({ jobId: job.id, path: job.input_path }, 'Removed ephemeral CSV upload after job');
+    return true;
+  } catch (err) {
+    log.warn(
+      { jobId: job.id, err: sanitizeErrorMessage(err) },
+      'Failed to remove ephemeral CSV upload',
+    );
+    return false;
   }
 }
 
@@ -390,6 +420,8 @@ export async function processCsvJob(
       });
       closeQuietly(parser);
       closeQuietly(input);
+      const emptyJob = getJob(jobId);
+      if (emptyJob) cleanupEphemeralUpload(emptyJob);
       return;
     }
 
@@ -417,12 +449,16 @@ export async function processCsvJob(
         finished_at: new Date().toISOString(),
       });
     }
+    const finishedJob = getJob(jobId);
+    if (finishedJob) cleanupEphemeralUpload(finishedJob);
   } catch (err) {
     closeQuietly(parser);
     closeQuietly(input);
     closeQuietly(writers?.stringifier);
     closeQuietly(writers?.out);
     failJob(err);
+    const failedJob = getJob(jobId);
+    if (failedJob) cleanupEphemeralUpload(failedJob);
     return;
   } finally {
     closeQuietly(parser);
