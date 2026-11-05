@@ -1,8 +1,16 @@
 /**
  * MailSure page interactions: nav, tabs, single + bulk verify.
+ *
+ * Banner ownership (avoids duplicate warnings):
+ * - #backend-status — persistent connection state (not configured / unreachable / disabled / connected)
+ * - #verify-feedback — form-only messages (empty input, CSV errors, API errors after a live backend,
+ *   bulk success). Never repeats the same connection warning already shown in #backend-status.
  */
 (function () {
   "use strict";
+
+  /** @type {{ kind: string, message?: string }} */
+  let backendState = { kind: "unknown" };
 
   function $(sel, root) {
     return (root || document).querySelector(sel);
@@ -47,24 +55,58 @@
     el.textContent = "";
   }
 
+  function setBackendStatus(kind, type, message) {
+    backendState = { kind: kind, message: message };
+    showBanner($("#backend-status"), type, message);
+  }
+
+  function emphasizeBackendStatus() {
+    const status = $("#backend-status");
+    if (!status || status.hidden) return;
+    if (typeof status.scrollIntoView === "function") {
+      status.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }
+
+  /**
+   * Connection problems are owned by #backend-status.
+   * Returns true when the caller should stop (do not also write #verify-feedback).
+   */
+  function handleConnectionIssue(reason, feedbackEl) {
+    const msg = window.MailSureApi.unavailableMessage(reason);
+    const type = reason === "not_configured" || reason === "website_api_disabled" ? "warn" : "error";
+    setBackendStatus(reason, type, msg);
+    hideBanner(feedbackEl);
+    emphasizeBackendStatus();
+    return true;
+  }
+
   async function initBackendBanner() {
     const banner = $("#backend-status");
     if (!banner || !window.MailSureApi) return;
 
     if (!window.MailSureApi.isConfigured()) {
-      showBanner(banner, "warn", window.MailSureApi.unavailableMessage("not_configured"));
+      setBackendStatus(
+        "not_configured",
+        "warn",
+        window.MailSureApi.unavailableMessage("not_configured"),
+      );
       return;
     }
 
     const health = await window.MailSureApi.checkHealth();
     if (!health.ok) {
-      showBanner(banner, "error", window.MailSureApi.unavailableMessage(health.reason));
+      setBackendStatus(
+        health.reason || "unreachable",
+        "error",
+        window.MailSureApi.unavailableMessage(health.reason || "unreachable"),
+      );
       return;
     }
 
     if (health.body && health.body.website_api === false) {
-      showBanner(
-        banner,
+      setBackendStatus(
+        "website_api_disabled",
         "warn",
         "API is reachable but the MailSure website API is disabled on the server " +
           "(OPENVERIFY_WEBSITE_API_ENABLED=false). Enable it to verify from this page.",
@@ -72,8 +114,8 @@
       return;
     }
 
-    showBanner(
-      banner,
+    setBackendStatus(
+      "ok",
       "info",
       "Connected to verification backend. Domain-level checks only — not mailbox existence proof.",
     );
@@ -99,7 +141,7 @@
         return;
       }
       if (!window.MailSureApi.isConfigured()) {
-        showBanner(banner, "warn", window.MailSureApi.unavailableMessage("not_configured"));
+        handleConnectionIssue("not_configured", banner);
         window.MailSureApi.renderResults(results, []);
         return;
       }
@@ -107,7 +149,12 @@
       try {
         const health = await window.MailSureApi.checkHealth();
         if (!health.ok) {
-          showBanner(banner, "error", window.MailSureApi.unavailableMessage(health.reason));
+          handleConnectionIssue(health.reason || "unreachable", banner);
+          window.MailSureApi.renderResults(results, []);
+          return;
+        }
+        if (health.body && health.body.website_api === false) {
+          handleConnectionIssue("website_api_disabled", banner);
           window.MailSureApi.renderResults(results, []);
           return;
         }
@@ -120,7 +167,12 @@
         lastResults = [];
         window.MailSureApi.renderResults(results, []);
         if (downloadBtn) downloadBtn.hidden = true;
-        showBanner(banner, "error", err.message || "Verification failed.");
+        const code = err && err.code;
+        if (code && window.MailSureApi.isConnectionReason(code)) {
+          handleConnectionIssue(code, banner);
+        } else {
+          showBanner(banner, "error", err.message || "Verification failed.");
+        }
       } finally {
         submit.disabled = false;
       }
@@ -158,7 +210,7 @@
       const cfg = window.MAILSURE_CONFIG || {};
 
       if (!window.MailSureApi.isConfigured()) {
-        showBanner(banner, "warn", window.MailSureApi.unavailableMessage("not_configured"));
+        handleConnectionIssue("not_configured", banner);
         window.MailSureApi.renderResults(results, []);
         return;
       }
@@ -171,7 +223,12 @@
         });
         const health = await window.MailSureApi.checkHealth();
         if (!health.ok) {
-          showBanner(banner, "error", window.MailSureApi.unavailableMessage(health.reason));
+          handleConnectionIssue(health.reason || "unreachable", banner);
+          window.MailSureApi.renderResults(results, []);
+          return;
+        }
+        if (health.body && health.body.website_api === false) {
+          handleConnectionIssue("website_api_disabled", banner);
           window.MailSureApi.renderResults(results, []);
           return;
         }
@@ -187,12 +244,22 @@
       } catch (err) {
         window.MailSureApi.renderResults(results, []);
         if (downloadBtn) downloadBtn.hidden = true;
-        showBanner(banner, "error", err.message || "Bulk verification failed.");
+        const code = err && err.code;
+        if (code && window.MailSureApi.isConnectionReason(code)) {
+          handleConnectionIssue(code, banner);
+        } else {
+          showBanner(banner, "error", err.message || "Bulk verification failed.");
+        }
       } finally {
         submit.disabled = false;
       }
     });
   }
+
+  // Test hook: expose backend state without polluting production UX.
+  window.__mailsureBackendState = function () {
+    return backendState;
+  };
 
   document.addEventListener("DOMContentLoaded", () => {
     initNav();

@@ -10,6 +10,8 @@ All notable changes to OpenVerify MCP will be documented in this file.
 - Optional verify-only website API (`OPENVERIFY_WEBSITE_API_ENABLED`): `POST /api/verify`, `POST /api/verify/batch`
 - GitHub Actions workflow `deploy-pages.yml` for Pages deployment of `public/`
 - Docs: `docs/mailsure-website.md`
+- Frontend ValidationResult shape checks; Compose/env wiring for website API + CORS + SQLite volume paths
+- Frontend/API tests for enable/disable, health, verify, batch, CORS, rate limits, invalid responses, CSV, duplicate banner
 
 ### Security
 
@@ -21,11 +23,14 @@ All notable changes to OpenVerify MCP will be documented in this file.
 
 - CSV validation uses bounded-memory streaming batches (no full-file row array)
 - HTTP tests assert successful MCP initialize structure and Host-header rejection
+- MailSure duplicate “backend unavailable” warning: connection state stays on `#backend-status`; `#verify-feedback` is form-only
+- Browser Origin allowlisting for website API: derive hostnames from `OPENVERIFY_CORS_ORIGINS` for MCP Origin guard (full URLs previously caused 403 Invalid Origin)
 
 ### Changed
 
 - Documented remote HTTPS + token requirements; CSV batch/size limits and cancellation behavior
 - `/health` and `/version` include `website_api` flag when reporting status
+- HTTP listen logs include `website_api` and CORS origin count
 
 ## [0.1.0] — 2026-11-03
 

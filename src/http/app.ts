@@ -13,16 +13,43 @@ import { mountWebsiteApi } from './website-api.js';
 
 const log = getLogger('http');
 
+/**
+ * createMcpExpressApp `allowedOrigins` expects Origin *hostnames* (port-agnostic),
+ * while the `cors` package expects full origins (scheme + host [+ port]).
+ * OPENVERIFY_CORS_ORIGINS is documented as full origins for browser CORS;
+ * derive hostnames for the MCP DNS-rebinding / Origin guard.
+ */
+export function corsOriginHostnames(origins: string[]): string[] {
+  const hosts = new Set<string>();
+  for (const raw of origins) {
+    const value = raw.trim();
+    if (!value) continue;
+    try {
+      hosts.add(new URL(value).hostname.toLowerCase());
+      continue;
+    } catch {
+      // Fall through — accept bare hostnames already in hostname form.
+    }
+    const withoutScheme = value.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '');
+    const hostPart = withoutScheme.split('/')[0]?.split(':')[0]?.trim();
+    if (hostPart) hosts.add(hostPart.toLowerCase());
+  }
+  return [...hosts];
+}
+
 export function createHttpApp(): Express {
   const cfg = getConfig();
   // Defense in depth: refuse to build an HTTP app for non-loopback binds without a token,
   // even if a caller bypasses startHttpServer().
   assertHttpAuthConfig(cfg);
 
+  const originHostnames = corsOriginHostnames(cfg.corsOrigins);
+
   const app = createMcpExpressApp({
     host: cfg.httpHost,
     allowedHosts: cfg.allowedHosts.length > 0 ? cfg.allowedHosts : undefined,
-    allowedOrigins: cfg.corsOrigins.length > 0 ? cfg.corsOrigins : undefined,
+    // Hostnames only — passing full https://… URLs causes 403 "Invalid Origin" for browsers.
+    allowedOrigins: originHostnames.length > 0 ? originHostnames : undefined,
     jsonLimit: '1mb',
   });
 
@@ -103,6 +130,8 @@ export async function startHttpServer(): Promise<{ close: () => Promise<void> }>
       port: cfg.httpPort,
       path: cfg.mcpPath,
       auth_required: Boolean(cfg.httpAuthToken),
+      website_api: cfg.websiteApiEnabled,
+      cors_origins: cfg.corsOrigins.length,
     },
     'HTTP MCP server listening',
   );
