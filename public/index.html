@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MailSure — Email Verification Made Simple</title>
+    <meta
+      name="description"
+      content="MailSure helps you verify email syntax, domains, MX records, and disposable addresses. Free, open-source, self-hosted. No mailbox-existence claims."
+    />
+    <meta name="theme-color" content="#2563eb" />
+    <link rel="canonical" href="https://eneelkant.github.io/email-validation-tool/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="MailSure" />
+    <meta property="og:title" content="MailSure — Email Verification Made Simple" />
+    <meta
+      property="og:description"
+      content="Professional email verification for lists and forms. Domain-level checks powered by OpenVerify MCP."
+    />
+    <meta property="og:url" content="https://eneelkant.github.io/email-validation-tool/" />
+    <meta property="og:image" content="https://eneelkant.github.io/email-validation-tool/favicon.svg" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="MailSure — Email Verification Made Simple" />
+    <meta
+      name="twitter:description"
+      content="Verify emails with syntax, DNS/MX, disposable, and role checks. Free and self-hosted."
+    />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Mono:wght@500;600&family=Source+Sans+3:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="container nav">
+        <a class="brand" href="index.html" aria-label="MailSure home">
+          <span class="brand-mark" aria-hidden="true">MS</span>
+          <span class="brand-name">MailSure</span>
+        </a>
+        <button
+          class="nav-toggle"
+          type="button"
+          aria-expanded="false"
+          aria-controls="site-nav"
+          aria-label="Open menu"
+        >
+          Menu
+        </button>
+        <ul class="nav-links" id="site-nav">
+          <li><a href="index.html" aria-current="page">Home</a></li>
+          <li><a href="about.html">About</a></li>
+          <li><a href="pricing.html">Pricing</a></li>
+          <li><a href="contact.html">Contact</a></li>
+          <li><a href="https://github.com/eneelkant/email-validation-tool">GitHub</a></li>
+        </ul>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero">
+        <div class="container">
+          <p class="hero-brand">MailSure</p>
+          <p class="hero-tagline">Email Verification Made Simple.</p>
+          <p class="hero-lead">
+            Check syntax, domain DNS/MX, disposable domains, and role-based addresses —
+            free, open-source, and self-hosted. Domain signals only; we never claim a mailbox exists.
+          </p>
+
+          <div class="hero-panel" id="verify">
+            <div class="tabs" role="tablist" aria-label="Verification mode">
+              <button class="tab" role="tab" id="tab-single" aria-selected="true" aria-controls="panel-single">
+                Single email
+              </button>
+              <button class="tab" role="tab" id="tab-bulk" aria-selected="false" aria-controls="panel-bulk">
+                Bulk CSV
+              </button>
+            </div>
+
+            <div class="panel" role="tabpanel" id="panel-single" aria-labelledby="tab-single">
+              <form class="verify-form" id="single-verify-form" novalidate>
+                <label class="label" for="email-input">Email address</label>
+                <div class="input-row">
+                  <input
+                    id="email-input"
+                    name="email"
+                    type="email"
+                    autocomplete="email"
+                    placeholder="name@example.com"
+                    required
+                    maxlength="320"
+                  />
+                  <button class="btn btn-primary" type="submit">Verify</button>
+                </div>
+                <p class="hint">Results mirror the OpenVerify <code>ValidationResult</code> schema.</p>
+              </form>
+            </div>
+
+            <div class="panel" role="tabpanel" id="panel-bulk" aria-labelledby="tab-bulk" hidden>
+              <form class="verify-form" id="bulk-verify-form">
+                <label class="label" for="csv-input">CSV file (email column)</label>
+                <input id="csv-input" name="csv" type="file" accept=".csv,text/csv" />
+                <p class="hint">
+                  Browser bulk is capped (default 50 unique emails, 2&nbsp;MiB). For large lists, use the
+                  self-hosted MCP <code>verify_csv</code> tool. Downloads sanitize formula-like cells.
+                </p>
+                <button class="btn btn-primary" type="submit">Verify CSV</button>
+              </form>
+            </div>
+
+            <div id="backend-status" class="banner" hidden role="status" aria-live="polite"></div>
+            <div id="verify-feedback" class="banner" hidden role="alert" aria-live="assertive"></div>
+            <div id="results" class="results" hidden></div>
+            <p style="margin-top: 1rem">
+              <button class="btn btn-secondary" type="button" id="download-csv" hidden>
+                Download results CSV
+              </button>
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section-alt" id="features" aria-labelledby="features-heading">
+        <div class="container">
+          <h2 id="features-heading">Features</h2>
+          <p class="section-lead">Built on the OpenVerify MCP validation engine — the same checks your agents use.</p>
+          <div class="feature-list">
+            <article class="feature">
+              <h3>Syntax &amp; IDN</h3>
+              <p>RFC-aware syntax validation with internationalized domain support.</p>
+            </article>
+            <article class="feature">
+              <h3>DNS / MX</h3>
+              <p>Domain existence and mail-exchanger lookups with timeouts treated as temporary, not invalid.</p>
+            </article>
+            <article class="feature">
+              <h3>Disposable &amp; role</h3>
+              <p>Local disposable-domain dataset and configurable role-based local parts.</p>
+            </article>
+            <article class="feature">
+              <h3>Bulk CSV</h3>
+              <p>Browser-friendly batches here; streaming, bounded MCP CSV jobs for large files.</p>
+            </article>
+            <article class="feature">
+              <h3>MCP-native</h3>
+              <p>STDIO and Streamable HTTP for Cursor, Claude, Gemini CLI, and more.</p>
+            </article>
+            <article class="feature">
+              <h3>No paid credits</h3>
+              <p>Self-host the engine. No commercial verification API dependency.</p>
+            </article>
+          </div>
+          <aside class="disclaimer" role="note">
+            <strong>Important:</strong> <code>valid_domain</code> means the domain looks mail-capable.
+            It does <em>not</em> mean the individual mailbox was confirmed.
+          </aside>
+        </div>
+      </section>
+
+      <section class="section" id="how-it-works" aria-labelledby="how-heading">
+        <div class="container">
+          <h2 id="how-heading">How it works</h2>
+          <p class="section-lead">One clear path from address to structured result.</p>
+          <div class="steps">
+            <article class="step">
+              <div>
+                <h3>Submit an email or CSV</h3>
+                <p>Use this site when a website API is configured, or call OpenVerify MCP tools locally.</p>
+              </div>
+            </article>
+            <article class="step">
+              <div>
+                <h3>Run layered checks</h3>
+                <p>Syntax → DNS/MX → disposable → role → optional SMTP/catch-all (off by default).</p>
+              </div>
+            </article>
+            <article class="step">
+              <div>
+                <h3>Read structured results</h3>
+                <p>
+                  Every response includes <code>overall_status</code>, <code>confidence</code>,
+                  <code>reason_codes</code>, and related ValidationResult fields.
+                </p>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section-alt" id="use-cases" aria-labelledby="use-heading">
+        <div class="container">
+          <h2 id="use-heading">Use cases</h2>
+          <p class="section-lead">Practical cleanup without overstating deliverability.</p>
+          <div class="use-cases">
+            <article class="use-case">
+              <h3>List hygiene</h3>
+              <p>Remove obvious syntax errors, dead domains, and disposable addresses before outreach.</p>
+            </article>
+            <article class="use-case">
+              <h3>Form quality</h3>
+              <p>Catch role inboxes and risky patterns early in signup or lead capture flows.</p>
+            </article>
+            <article class="use-case">
+              <h3>Agent workflows</h3>
+              <p>Let MCP clients verify addresses inside coding and ops assistants you already use.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="faq" aria-labelledby="faq-heading">
+        <div class="container">
+          <h2 id="faq-heading">FAQ</h2>
+          <div class="faq-list">
+            <article class="faq-item">
+              <h3>Does MailSure prove an inbox exists?</h3>
+              <p>No. Results are domain-level and policy signals. Never treat <code>valid_domain</code> as mailbox proof.</p>
+            </article>
+            <article class="faq-item">
+              <h3>Why is verify disabled on GitHub Pages?</h3>
+              <p>
+                Pages serves static files only. Point <code>API_BASE_URL</code> at a self-hosted server with the
+                website API enabled, or use MCP locally. We never invent results.
+              </p>
+            </article>
+            <article class="faq-item">
+              <h3>Is this free?</h3>
+              <p>Yes — open-source under GPL-3.0. See <a href="pricing.html">pricing</a> for the transparent free model.</p>
+            </article>
+            <article class="faq-item">
+              <h3>Where is the MCP server?</h3>
+              <p>
+                In this repository:
+                <a href="https://github.com/eneelkant/email-validation-tool">eneelkant/email-validation-tool</a>.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <div class="footer-grid">
+          <div>
+            <p class="footer-brand">MailSure</p>
+            <p>Email Verification Made Simple. Powered by OpenVerify MCP.</p>
+          </div>
+          <div class="footer-col">
+            <h3>Product</h3>
+            <ul>
+              <li><a href="about.html">About</a></li>
+              <li><a href="pricing.html">Pricing</a></li>
+              <li><a href="contact.html">Contact</a></li>
+            </ul>
+          </div>
+          <div class="footer-col">
+            <h3>Legal</h3>
+            <ul>
+              <li><a href="privacy.html">Privacy</a></li>
+              <li><a href="terms.html">Terms</a></li>
+              <li><a href="https://github.com/eneelkant/email-validation-tool/blob/main/LICENSE">License</a></li>
+            </ul>
+          </div>
+        </div>
+        <p class="footer-meta">© MailSure / OpenVerify MCP contributors. GPL-3.0.</p>
+      </div>
+    </footer>
+
+    <script src="js/config.js" defer></script>
+    <script src="js/csv.js" defer></script>
+    <script src="js/verify.js" defer></script>
+    <script src="js/app.js" defer></script>
+  </body>
+</html>
