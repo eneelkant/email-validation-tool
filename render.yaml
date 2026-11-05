@@ -10,6 +10,12 @@
 # Render shows you — leave it empty until then.
 #
 # Env var names remain OPENVERIFY_* for compatibility with local/.env/Docker configs.
+#
+# Free-tier / no persistent disk (option B): there is intentionally NO `disk:` block.
+# OPENVERIFY_* data paths stay under /data (created + chowned in the Dockerfile).
+# That directory is writable on the container filesystem but EPHEMERAL — SQLite,
+# uploads, and output wipe on every redeploy/restart. Upgrade later with a Render
+# disk only if you need persistence.
 
 services:
   - type: web
@@ -32,6 +38,7 @@ services:
       # Prefer Render-injected PORT (dynamic). OPENVERIFY_HTTP_PORT remains the local/Docker default.
       - key: OPENVERIFY_MCP_PATH
         value: /mcp
+      # Ephemeral writable paths (no Render disk). Dockerfile creates /data for user openverify.
       - key: OPENVERIFY_DATA_DIR
         value: /data
       - key: OPENVERIFY_DB_PATH
@@ -66,8 +73,3 @@ services:
       # (and any custom domain). Required for Host / DNS-rebinding guards + Render health checks.
       - key: OPENVERIFY_ALLOWED_HOSTS
         sync: false
-    # SQLite + uploads/output need persistence across deploys (paid plans; free tier is ephemeral).
-    disk:
-      name: mailsure-data
-      mountPath: /data
-      sizeGB: 1

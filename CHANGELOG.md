@@ -6,7 +6,7 @@ All notable changes to MailSure MCP will be documented in this file.
 
 ### Added
 
-- Render Blueprint `render.yaml` for Web Service **mailsure-api** (Docker, health `/health`, website API + Pages CORS, SQLite disk, secrets via Render)
+- Render Blueprint `render.yaml` for Web Service **mailsure-api** (Docker, health `/health`, website API + Pages CORS, free-tier **no persistent disk** / ephemeral `/data`, secrets via Render)
 - Docs: `docs/render-deploy.md` (Blueprint creation steps; no invented Render URL)
 - Platform `PORT` preferred over `OPENVERIFY_HTTP_PORT` for cloud hosts (Render)
 - MailSure static website in `public/` (GitHub Pages) with verify UI, about, pricing, contact, privacy/terms drafts
