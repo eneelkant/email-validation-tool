@@ -7,14 +7,14 @@ import { loadDisposableDomains } from '../validators/disposable.js';
 const log = getLogger('stdio');
 
 /**
- * Start OpenVerify over STDIO. Logs go to stderr only.
+ * Start MailSure MCP over STDIO. Logs go to stderr only.
  */
 export async function startStdioServer(): Promise<void> {
   // Touch DB + disposable dataset before protocol traffic
   getDb();
   loadDisposableDomains();
 
-  log.info('Starting OpenVerify MCP over STDIO');
+  log.info('Starting MailSure MCP over STDIO');
 
   const handle = serveStdio(() => createOpenVerifyServer());
 

@@ -40,7 +40,7 @@ function errorResult(err: unknown) {
 }
 
 /**
- * Register all OpenVerify MCP tools on a server instance.
+ * Register all MailSure MCP tools on a server instance.
  * Call inside a per-request / per-connection factory.
  */
 export function registerTools(server: McpServer): void {
@@ -241,7 +241,7 @@ export function registerTools(server: McpServer): void {
     'get_statistics',
     {
       title: 'Get statistics',
-      description: 'Return cache and job statistics for this OpenVerify instance.',
+      description: 'Return cache and job statistics for this MailSure MCP instance.',
       inputSchema: z.object({}),
       annotations: {
         readOnlyHint: true,

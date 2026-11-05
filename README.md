@@ -1,8 +1,8 @@
-# OpenVerify MCP
+# MailSure MCP
 
-**Free, open-source, self-hosted email verification MCP server** for local validation, bounded bulk CSV processing, DNS/MX checks, and disposable-email detection — without paid API credits.
+**Free, open-source, self-hosted email verification** for local validation, bounded bulk CSV processing, DNS/MX checks, and disposable-email detection — without paid API credits.
 
-**MailSure** (*Email Verification Made Simple.*) is the static product website in [`public/`](public/), deployed via GitHub Pages. See [MailSure website](docs/mailsure-website.md).
+**MailSure** (*Email Verification Made Simple.*) is the product name for the website, MCP server, and optional verify API. The npm package/bin and `OPENVERIFY_*` environment variable names are kept for compatibility with existing configs.
 
 > Repository: [eneelkant/email-validation-tool](https://github.com/eneelkant/email-validation-tool)  
 > Website: [eneelkant.github.io/email-validation-tool](https://eneelkant.github.io/email-validation-tool/) (after Pages workflow succeeds on `main`)  
@@ -27,6 +27,7 @@
 
 - Node.js **22+**
 - Optional: Docker
+- Optional: [Render](docs/render-deploy.md) for hosting `mailsure-api`
 
 ## Quick start (STDIO)
 
@@ -36,7 +37,7 @@ npm run build
 node dist/index.js --transport stdio
 ```
 
-Point your MCP client at that command (see [Client setup](#client-setup)).
+Point your MCP client at that command (see [Client setup](#client-setup)). MCP `serverInfo.name` is `mailsure-mcp`.
 
 ## Quick start (HTTP)
 
@@ -51,9 +52,10 @@ node dist/index.js --transport http
 Endpoints:
 
 - MCP: `POST /mcp` (Streamable HTTP) — Bearer auth when token configured / required
-- `GET /health`, `GET /ready`, `GET /version` — liveness only; no secrets
+- `GET /health`, `GET /ready`, `GET /version` — liveness only; no secrets (`service: mailsure-api`, product MailSure MCP)
+- Optional website API: `POST /api/verify`, `POST /api/verify/batch` (when enabled)
 
-Remote exposure also needs **HTTPS** (terminate TLS at a reverse proxy) and a strong token.
+Remote exposure also needs **HTTPS** (Render or a reverse proxy) and a strong token. Cloud hosts that inject `PORT` are supported; `OPENVERIFY_HTTP_PORT` remains the local/Docker default.
 
 ## Docker
 
@@ -64,6 +66,17 @@ docker compose up --build
 ```
 
 Data persists in the `openverify-data` volume. Do not bake secrets into the image. Image/compose are provided for deployment convenience; treat remote use as requiring auth + TLS review.
+
+## Render (mailsure-api)
+
+Blueprint: [`render.yaml`](render.yaml). Operator steps: [docs/render-deploy.md](docs/render-deploy.md).
+
+- Web service name: **mailsure-api** (Docker, branch `main`, health `/health`)
+- Enables website API + CORS for `https://eneelkant.github.io`
+- Generates `OPENVERIFY_HTTP_AUTH_TOKEN`; you must set `OPENVERIFY_ALLOWED_HOSTS` to include the real Render hostname
+- Persistent disk at `/data` for SQLite (paid plans)
+
+**Do not invent a Render URL.** Leave [`public/js/config.js`](public/js/config.js) `API_BASE_URL` empty until you have confirmed `GET /health` on the HTTPS origin Render assigns. This repository does not claim a live backend deploy.
 
 ## MCP tools
 
@@ -83,8 +96,8 @@ Examples ship in-repo. **Tested in this project’s CI/unit suite for transports
 
 | Client | Config |
 |--------|--------|
-| Cursor | [`.cursor/mcp.json`](.cursor/mcp.json) |
-| Gemini CLI | [`.gemini/settings.json`](.gemini/settings.json) (server alias `openverify`) |
+| Cursor | [`.cursor/mcp.json`](.cursor/mcp.json) (server alias `mailsure`) |
+| Gemini CLI | [`.gemini/settings.json`](.gemini/settings.json) (server alias `mailsure`) |
 | Claude Desktop / Code | [`examples/claude-desktop-config.json`](examples/claude-desktop-config.json) |
 | ChatGPT (remote) | [`examples/chatgpt-remote.md`](examples/chatgpt-remote.md) |
 
@@ -101,16 +114,18 @@ After `npm run build`, Cursor/Gemini can use:
 
 ## Configuration
 
-See [`.env.example`](.env.example). Key variables:
+See [`.env.example`](.env.example). Key variables (names keep the `OPENVERIFY_` prefix for compatibility):
 
 - `OPENVERIFY_TRANSPORT` — `stdio` \| `http` \| `both` (STDIO needs no HTTP token)
 - `OPENVERIFY_HTTP_HOST` — default `127.0.0.1` (loopback); `0.0.0.0` requires auth token
+- `OPENVERIFY_HTTP_PORT` — local/Docker listen port (default `8787`); overridden by platform `PORT` when set (e.g. Render)
 - `OPENVERIFY_HTTP_AUTH_TOKEN` — Bearer for MCP; required for non-loopback HTTP
 - `OPENVERIFY_CSV_BATCH_SIZE` — streaming batch size (default 100, cap 1000)
 - `OPENVERIFY_MAX_CSV_BYTES` — max CSV bytes accepted (default 100 MiB)
 - `OPENVERIFY_CONCURRENCY` — validation concurrency
 - `OPENVERIFY_SMTP_ENABLED` — default `false`
 - `OPENVERIFY_LOG_EMAILS` — default `false` (redact emails in logs)
+- `OPENVERIFY_WEBSITE_API_ENABLED` — default `false`; verify-only REST for MailSure Pages
 
 CSV jobs stream in bounded batches (read → parse → batch → validate → ordered write), support cancellation, preserve row order/columns, and sanitize formula-like cells. Cancellation stops new batches, flushes completed output, and marks the job `cancelled`.
 
@@ -124,15 +139,16 @@ Static site sources live in [`public/`](public/). Workflow: [`.github/workflows/
 
 By default the Pages build has an empty `API_BASE_URL` in [`public/js/config.js`](public/js/config.js) — the UI shows a **single** backend-unavailable banner and **never invents results**. To power browser verify:
 
-1. Self-host OpenVerify HTTP with `OPENVERIFY_TRANSPORT=http`, `OPENVERIFY_WEBSITE_API_ENABLED=true`, and `OPENVERIFY_CORS_ORIGINS=https://eneelkant.github.io` (see [`.env.example`](.env.example) / Docker Compose).
+1. Host `mailsure-api` (Render Blueprint or self-hosted HTTP) with `OPENVERIFY_TRANSPORT=http`, `OPENVERIFY_WEBSITE_API_ENABLED=true`, and `OPENVERIFY_CORS_ORIGINS=https://eneelkant.github.io`.
 2. Confirm `GET /health` reports `"website_api": true`.
-3. Set `API_BASE_URL` in `public/js/config.js` to that origin (e.g. `https://api.example.com` or `http://127.0.0.1:8787` for local).
+3. Set `API_BASE_URL` in `public/js/config.js` to that **real** origin only.
 
-There is no hosted cloud API in this repo — leave `API_BASE_URL` empty until you operate a backend. MCP is **not** exposed as public REST; the optional website API is verify-only (`/api/verify`, `/api/verify/batch`) plus existing `/health`. Full steps: [docs/mailsure-website.md](docs/mailsure-website.md).
+There is no invented cloud URL in this repo — leave `API_BASE_URL` empty until you operate a backend. MCP is **not** exposed as public REST; the optional website API is verify-only (`/api/verify`, `/api/verify/batch`) plus existing `/health`. Full steps: [docs/mailsure-website.md](docs/mailsure-website.md).
 
 ## Documentation
 
 - [MailSure website](docs/mailsure-website.md)
+- [Render deploy (mailsure-api)](docs/render-deploy.md)
 - [Architecture](docs/architecture.md)
 - [MCP client setup](docs/mcp-client-setup.md)
 - [Security configuration](docs/security-config.md)

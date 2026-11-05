@@ -3,15 +3,16 @@
  *
  * WHERE TO SET THE BACKEND URL
  * ----------------------------
- * Edit API_BASE_URL below to your self-hosted OpenVerify HTTP origin when the
- * website API is enabled (OPENVERIFY_WEBSITE_API_ENABLED=true).
+ * Edit API_BASE_URL below to your self-hosted MailSure HTTP origin (mailsure-api)
+ * when the website API is enabled (OPENVERIFY_WEBSITE_API_ENABLED=true).
  *
  * Examples:
  *   Local loopback:  "http://127.0.0.1:8787"
- *   Deployed API:    "https://api.example.com"
+ *   Deployed API:    "https://api.example.com"  // only a real origin you operate
  *
  * Leave empty for GitHub Pages–only deploys — the UI shows a single clear
- * "backend unavailable" banner and never invents results.
+ * "backend unavailable" banner and never invents results. Never invent a
+ * Render/onrender URL here.
  *
  * Do not put secrets, bearer tokens, or fabricated API URLs here.
  * After changing this file for Pages, merge to main so deploy-pages.yml publishes it.

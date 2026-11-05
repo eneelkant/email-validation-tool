@@ -1,6 +1,6 @@
 # MailSure website
 
-**MailSure** — *Email Verification Made Simple.* — is the static public site for this repository, backed optionally by a verify-only HTTP API that reuses the OpenVerify validation engine.
+**MailSure** — *Email Verification Made Simple.* — is the static public site for this repository, backed optionally by a verify-only HTTP API that reuses the MailSure MCP validation engine (`OPENVERIFY_*` env names kept for compatibility).
 
 Live (after Pages is enabled and `deploy-pages.yml` succeeds on `main`):  
 https://eneelkant.github.io/email-validation-tool/
@@ -60,7 +60,7 @@ Connection warnings are shown **once** in `#backend-status`. Submit handlers do 
 
 ## Website API (optional, self-hosted)
 
-GitHub Pages cannot run Node. There is **no hosted MailSure cloud API** in this repository. To power the verify UI you must run OpenVerify HTTP yourself.
+GitHub Pages cannot run Node. There is **no invented hosted API URL** in this repository. To power the verify UI you must run MailSure HTTP yourself (local, Docker Compose, VPS, or the Render Blueprint in [`render.yaml`](../render.yaml) — see [render-deploy.md](render-deploy.md)). Do **not** claim the backend is deployed until `GET /health` succeeds on a real origin you operate.
 
 ### Local development (practical)
 
@@ -95,9 +95,10 @@ Open `http://127.0.0.1:3000`, confirm the connected banner, then use Single / Bu
 
 | Option | Notes |
 |--------|--------|
+| **Render Blueprint (`mailsure-api`)** | Root [`render.yaml`](../render.yaml). Docker, health `/health`, website API + Pages CORS, MCP token generated, disk at `/data`. Operator steps: [render-deploy.md](render-deploy.md). Set `OPENVERIFY_ALLOWED_HOSTS` to the **real** Render hostname after create. Never invent the URL; leave `API_BASE_URL` empty until `/health` works. |
 | **Docker Compose** | See `docker-compose.yml`. Requires `OPENVERIFY_HTTP_AUTH_TOKEN` (protects `/mcp`). Set `OPENVERIFY_WEBSITE_API_ENABLED=true`, `OPENVERIFY_CORS_ORIGINS=https://eneelkant.github.io`, and `OPENVERIFY_ALLOWED_HOSTS` to include your public API hostname. Terminate TLS at a reverse proxy. |
 | **Bare Node on a VPS** | Same env as Compose; bind `0.0.0.0` only behind HTTPS reverse proxy with a strong MCP token. |
-| **Platform container** | Same image/`Dockerfile`; inject env vars; persist `/data` for SQLite. |
+| **Other platform container** | Same image/`Dockerfile`; inject env vars; prefer platform `PORT`; persist `/data` for SQLite. |
 
 SQLite paths default under `OPENVERIFY_DATA_DIR` / `OPENVERIFY_DB_PATH` (Compose uses the `openverify-data` volume).
 
@@ -146,7 +147,7 @@ Frontend wiring: single form → `POST /api/verify`; bulk CSV → `POST /api/ver
 
 ### Blocker / limitation
 
-There is **no** hosted MailSure cloud API in this repository. Public verify-from-Pages requires you (or an operator) to run OpenVerify HTTP somewhere with the website API + CORS configured. Until then, use MCP locally; the static site remains a documentation and UX surface without fake results.
+Public verify-from-Pages requires you (or an operator) to run MailSure HTTP (`mailsure-api`) somewhere with the website API + CORS configured. Until a real origin exists, use MCP locally; keep `API_BASE_URL` empty; the static site remains a documentation and UX surface without fake results.
 
 ## ValidationResult fields shown
 

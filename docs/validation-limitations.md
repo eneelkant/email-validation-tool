@@ -1,6 +1,6 @@
-# Validation limitations — OpenVerify MCP
+# Validation limitations — MailSure MCP
 
-OpenVerify is a **self-hosted signal engine**, not a deliverability guarantee service.
+MailSure is a **self-hosted signal engine**, not a deliverability guarantee service.
 
 ## What results mean
 

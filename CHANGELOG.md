@@ -1,17 +1,26 @@
 # Changelog
 
-All notable changes to OpenVerify MCP will be documented in this file.
+All notable changes to MailSure MCP will be documented in this file.
 
 ## [Unreleased]
 
 ### Added
 
+- Render Blueprint `render.yaml` for Web Service **mailsure-api** (Docker, health `/health`, website API + Pages CORS, SQLite disk, secrets via Render)
+- Docs: `docs/render-deploy.md` (Blueprint creation steps; no invented Render URL)
+- Platform `PORT` preferred over `OPENVERIFY_HTTP_PORT` for cloud hosts (Render)
 - MailSure static website in `public/` (GitHub Pages) with verify UI, about, pricing, contact, privacy/terms drafts
 - Optional verify-only website API (`OPENVERIFY_WEBSITE_API_ENABLED`): `POST /api/verify`, `POST /api/verify/batch`
 - GitHub Actions workflow `deploy-pages.yml` for Pages deployment of `public/`
 - Docs: `docs/mailsure-website.md`
 - Frontend ValidationResult shape checks; Compose/env wiring for website API + CORS + SQLite volume paths
 - Frontend/API tests for enable/disable, health, verify, batch, CORS, rate limits, invalid responses, CSV, duplicate banner
+
+### Changed
+
+- User-facing product/MCP identity rebranded to **MailSure MCP** (`serverInfo.name` = `mailsure-mcp`; health `service` = `mailsure-api`)
+- `OPENVERIFY_*` env keys, API paths, DB filenames, npm package/bin, and import helpers kept for compatibility
+- Client example aliases renamed to `mailsure` (Cursor / Gemini / Claude)
 
 ### Security
 

@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "openverify": {
+    "mailsure": {
       "command": "node",
       "args": [
         "/ABSOLUTE/PATH/TO/email-validation-tool/dist/index.js",

@@ -76,7 +76,8 @@ export function createHttpApp(): Express {
   app.get('/health', (_req: Request, res: Response) => {
     res.json({
       status: 'ok',
-      service: 'openverify-mcp',
+      service: 'mailsure-api',
+      product: 'MailSure MCP',
       website_api: cfg.websiteApiEnabled,
     });
   });
@@ -93,9 +94,10 @@ export function createHttpApp(): Express {
 
   app.get('/version', (_req: Request, res: Response) => {
     res.json({
-      name: 'openverify-mcp',
+      name: 'mailsure-mcp',
       version: cfg.version,
-      product: 'OpenVerify MCP',
+      product: 'MailSure MCP',
+      service: 'mailsure-api',
       website_api: cfg.websiteApiEnabled,
     });
   });
@@ -133,7 +135,7 @@ export async function startHttpServer(): Promise<{ close: () => Promise<void> }>
       website_api: cfg.websiteApiEnabled,
       cors_origins: cfg.corsOrigins.length,
     },
-    'HTTP MCP server listening',
+    'MailSure MCP HTTP server listening',
   );
 
   return {

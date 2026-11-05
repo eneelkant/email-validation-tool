@@ -45,7 +45,7 @@ export function ensureDisposableDatasetFile(): string {
   mkdirSync(path.dirname(file), { recursive: true });
   if (!existsSync(file)) {
     const header = [
-      '# OpenVerify MCP disposable domain dataset',
+      '# MailSure MCP disposable domain dataset',
       '# Source: curated local seed (not downloaded per request)',
       `# Updated: ${new Date().toISOString()}`,
       '# One domain per line. Lines starting with # are comments.',
@@ -118,7 +118,7 @@ export function updateDisposableDomainsFromText(
   const sorted = [...existing].sort();
   const now = new Date().toISOString();
   const body = [
-    '# OpenVerify MCP disposable domain dataset',
+    '# MailSure MCP disposable domain dataset',
     `# Source: ${sourceLabel}`,
     `# Updated: ${now}`,
     '# One domain per line. Lines starting with # are comments.',

@@ -1,4 +1,5 @@
-# OpenVerify MCP — multi-stage production image
+# MailSure MCP / mailsure-api — multi-stage production image
+# OPENVERIFY_* env names kept for compatibility with .env / Compose / Render.
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
@@ -30,6 +31,7 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/data ./data
 USER openverify
 EXPOSE 8787
+# Prefer PLATFORM PORT (Render) when set; fall back to OPENVERIFY_HTTP_PORT / 8787.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:8787/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "const p=process.env.PORT||process.env.OPENVERIFY_HTTP_PORT||'8787';fetch('http://127.0.0.1:'+p+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "dist/index.js", "--transport", "http"]

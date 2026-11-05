@@ -1,6 +1,6 @@
 # Architecture
 
-OpenVerify MCP is a modular TypeScript service:
+MailSure MCP is a modular TypeScript service (product identity **MailSure**; env keys remain `OPENVERIFY_*`):
 
 ```
 src/

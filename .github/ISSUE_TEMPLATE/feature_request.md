@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an improvement for OpenVerify MCP
+about: Suggest an improvement for MailSure MCP
 title: "[feat] "
 labels: enhancement
 ---

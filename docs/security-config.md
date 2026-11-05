@@ -1,4 +1,4 @@
-# Security configuration — OpenVerify MCP
+# Security configuration — MailSure MCP
 
 See also [SECURITY.md](../SECURITY.md) for the threat model and reporting process.
 

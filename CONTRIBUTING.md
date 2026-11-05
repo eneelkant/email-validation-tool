@@ -1,4 +1,4 @@
-# Contributing to OpenVerify MCP
+# Contributing to MailSure MCP
 
 Thanks for helping improve this project.
 
