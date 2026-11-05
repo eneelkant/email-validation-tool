@@ -95,7 +95,7 @@ Open `http://127.0.0.1:3000`, confirm the connected banner, then use Single / Bu
 
 | Option | Notes |
 |--------|--------|
-| **Render Blueprint (`mailsure-api`)** | Root [`render.yaml`](../render.yaml). Docker, health `/health`, website API + Pages CORS, MCP token generated, disk at `/data`. Operator steps: [render-deploy.md](render-deploy.md). Set `OPENVERIFY_ALLOWED_HOSTS` to the **real** Render hostname after create. Never invent the URL; leave `API_BASE_URL` empty until `/health` works. |
+| **Render Blueprint (`mailsure-api`)** | Root [`render.yaml`](../render.yaml). Docker, health `/health`, website API + Pages CORS, MCP token generated, **no persistent disk** (free tier; `/data` ephemeral). Operator steps: [render-deploy.md](render-deploy.md). Set `OPENVERIFY_ALLOWED_HOSTS` to the **real** Render hostname after create. Never invent the URL; leave `API_BASE_URL` empty until `/health` works. |
 | **Docker Compose** | See `docker-compose.yml`. Requires `OPENVERIFY_HTTP_AUTH_TOKEN` (protects `/mcp`). Set `OPENVERIFY_WEBSITE_API_ENABLED=true`, `OPENVERIFY_CORS_ORIGINS=https://eneelkant.github.io`, and `OPENVERIFY_ALLOWED_HOSTS` to include your public API hostname. Terminate TLS at a reverse proxy. |
 | **Bare Node on a VPS** | Same env as Compose; bind `0.0.0.0` only behind HTTPS reverse proxy with a strong MCP token. |
 | **Other platform container** | Same image/`Dockerfile`; inject env vars; prefer platform `PORT`; persist `/data` for SQLite. |
