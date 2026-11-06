@@ -11,6 +11,10 @@ import {
   getConfig,
   isMemoryDbPath,
   describeDbBackend,
+  isReadonlyDeployPath,
+  relocateEphemeralPath,
+  resetEphemeralRuntimeRootCache,
+  getEphemeralRuntimeRoot,
 } from '../src/config/env.js';
 import { closeDb, getDb, getJob } from '../src/database/db.js';
 import { startCsvValidationJob } from '../src/processing/csv.js';
@@ -233,5 +237,183 @@ describe('PORT startup with ephemeral storage', () => {
     expect(cfg.httpPort).toBe(18787);
     expect(cfg.ephemeralStorage).toBe(true);
     expect(cfg.dbPath).toBe(':memory:');
+  });
+});
+
+describe('ephemeral never mkdir under /var/task (Enzonic / Lambda)', () => {
+  const prev = {
+    data: process.env.OPENVERIFY_DATA_DIR,
+    db: process.env.OPENVERIFY_DB_PATH,
+    upload: process.env.OPENVERIFY_UPLOAD_DIR,
+    output: process.env.OPENVERIFY_OUTPUT_DIR,
+    disposable: process.env.OPENVERIFY_DISPOSABLE_PATH,
+    ephemeral: process.env.OPENVERIFY_EPHEMERAL_STORAGE,
+    host: process.env.OPENVERIFY_HTTP_HOST,
+    port: process.env.PORT,
+    token: process.env.OPENVERIFY_HTTP_AUTH_TOKEN,
+  };
+
+  beforeEach(() => {
+    closeDb();
+    resetConfigCache();
+    resetEphemeralRuntimeRootCache();
+    resetLogger();
+    // Simulate Enzonic/Lambda defaults: relative package paths resolve under /var/task.
+    process.env.OPENVERIFY_DATA_DIR = '/var/task/data/runtime';
+    process.env.OPENVERIFY_DB_PATH = '/var/task/data/runtime/openverify.sqlite';
+    process.env.OPENVERIFY_UPLOAD_DIR = '/var/task/data/uploads';
+    process.env.OPENVERIFY_OUTPUT_DIR = '/var/task/data/runtime/output';
+    process.env.OPENVERIFY_DISPOSABLE_PATH = '/var/task/data/disposable-domains.txt';
+    process.env.OPENVERIFY_EPHEMERAL_STORAGE = 'true';
+    process.env.OPENVERIFY_HTTP_HOST = '127.0.0.1';
+    process.env.OPENVERIFY_ALLOWED_HOSTS = '127.0.0.1,localhost';
+    process.env.OPENVERIFY_HTTP_AUTH_TOKEN = '';
+    delete process.env.PORT;
+  });
+
+  afterEach(() => {
+    closeDb();
+    resetConfigCache();
+    resetLogger();
+    const root = getEphemeralRuntimeRoot();
+    rmSync(root, { recursive: true, force: true });
+    resetEphemeralRuntimeRootCache();
+    process.env.OPENVERIFY_DATA_DIR = prev.data;
+    process.env.OPENVERIFY_DB_PATH = prev.db;
+    process.env.OPENVERIFY_UPLOAD_DIR = prev.upload;
+    process.env.OPENVERIFY_OUTPUT_DIR = prev.output;
+    process.env.OPENVERIFY_DISPOSABLE_PATH = prev.disposable;
+    process.env.OPENVERIFY_EPHEMERAL_STORAGE = prev.ephemeral ?? 'false';
+    process.env.OPENVERIFY_HTTP_HOST = prev.host;
+    if (prev.port === undefined) delete process.env.PORT;
+    else process.env.PORT = prev.port;
+    process.env.OPENVERIFY_HTTP_AUTH_TOKEN = prev.token ?? '';
+  });
+
+  it('detects readonly deploy paths', () => {
+    expect(isReadonlyDeployPath('/var/task/data/runtime')).toBe(true);
+    expect(isReadonlyDeployPath('/var/runtime/foo')).toBe(true);
+    expect(isReadonlyDeployPath('/data/openverify.sqlite')).toBe(false);
+    expect(isReadonlyDeployPath(path.join(os.tmpdir(), 'x'))).toBe(false);
+  });
+
+  it('relocates /var/task paths into os.tmpdir when ephemeral', () => {
+    const relocated = relocateEphemeralPath(
+      '/var/task/data/runtime',
+      true,
+      'runtime',
+    );
+    expect(relocated.startsWith(os.tmpdir())).toBe(true);
+    expect(relocated.includes(`${path.sep}var${path.sep}task`)).toBe(false);
+    expect(relocateEphemeralPath('/data', true, 'runtime')).toBe('/data');
+    expect(relocateEphemeralPath('/var/task/data/runtime', false, 'runtime')).toBe(
+      '/var/task/data/runtime',
+    );
+  });
+
+  it('loadConfig remaps storage out of /var/task into tmpdir', () => {
+    const cfg = loadConfig();
+    expect(cfg.ephemeralStorage).toBe(true);
+    expect(cfg.dataDir.startsWith(os.tmpdir())).toBe(true);
+    expect(cfg.uploadDir.startsWith(os.tmpdir())).toBe(true);
+    expect(cfg.outputDir.startsWith(os.tmpdir())).toBe(true);
+    expect(cfg.dbPath.startsWith(os.tmpdir())).toBe(true);
+    expect(cfg.disposablePath.startsWith(os.tmpdir())).toBe(true);
+    expect(isReadonlyDeployPath(cfg.dataDir)).toBe(false);
+    expect(isReadonlyDeployPath(cfg.dbPath)).toBe(false);
+    // Regression: the exact Enzonic failure path must not exist / not be used
+    expect(cfg.dataDir).not.toBe('/var/task/data/runtime');
+    expect(existsSync('/var/task/data/runtime')).toBe(false);
+    expect(existsSync(cfg.dataDir)).toBe(true);
+    expect(existsSync(cfg.uploadDir)).toBe(true);
+    expect(existsSync(cfg.outputDir)).toBe(true);
+  });
+
+  it('SQLite file + CSV validation work after /var/task remap', async () => {
+    const cfg = loadConfig();
+    getDb();
+    expect(describeDbBackend()).toBe('file');
+    expect(existsSync(cfg.dbPath)).toBe(true);
+
+    const input = path.join(cfg.uploadDir, 'enzonic-sample.csv');
+    writeFileSync(input, 'email\nbad-address\n', 'utf8');
+    const job = await startCsvValidationJob({
+      inputPath: input,
+      wait: true,
+      concurrency: 1,
+    });
+    const final = getJob(job.id)!;
+    expect(final.status).toBe('completed');
+    expect(existsSync(input)).toBe(false);
+    expect(final.output_path).toBeTruthy();
+    expect(existsSync(final.output_path!)).toBe(true);
+  });
+});
+
+describe('non-ephemeral / Render-style absolute paths unchanged', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = withTempRuntime();
+    // Simulate Render-style absolute writable paths with ephemeral on.
+    process.env.OPENVERIFY_DATA_DIR = root;
+    process.env.OPENVERIFY_DB_PATH = path.join(root, 'openverify.sqlite');
+    process.env.OPENVERIFY_UPLOAD_DIR = path.join(root, 'uploads');
+    process.env.OPENVERIFY_OUTPUT_DIR = path.join(root, 'output');
+    process.env.OPENVERIFY_EPHEMERAL_STORAGE = 'true';
+    resetConfigCache();
+    resetLogger();
+  });
+
+  afterEach(() => {
+    closeDb();
+    resetConfigCache();
+    resetLogger();
+    process.env.OPENVERIFY_EPHEMERAL_STORAGE = 'false';
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('keeps explicit writable absolute paths (Render /data style)', () => {
+    const cfg = loadConfig();
+    expect(cfg.dataDir).toBe(root);
+    expect(cfg.dbPath).toBe(path.join(root, 'openverify.sqlite'));
+    expect(cfg.uploadDir).toBe(path.join(root, 'uploads'));
+    expect(cfg.outputDir).toBe(path.join(root, 'output'));
+  });
+});
+
+describe('non-ephemeral refuses mkdir under /var/task', () => {
+  const prev = {
+    data: process.env.OPENVERIFY_DATA_DIR,
+    db: process.env.OPENVERIFY_DB_PATH,
+    upload: process.env.OPENVERIFY_UPLOAD_DIR,
+    output: process.env.OPENVERIFY_OUTPUT_DIR,
+    disposable: process.env.OPENVERIFY_DISPOSABLE_PATH,
+  };
+
+  beforeEach(() => {
+    resetConfigCache();
+    resetEphemeralRuntimeRootCache();
+    process.env.OPENVERIFY_DATA_DIR = '/var/task/data/runtime';
+    process.env.OPENVERIFY_DB_PATH = '/var/task/data/runtime/openverify.sqlite';
+    process.env.OPENVERIFY_UPLOAD_DIR = '/var/task/data/uploads';
+    process.env.OPENVERIFY_OUTPUT_DIR = '/var/task/data/runtime/output';
+    process.env.OPENVERIFY_DISPOSABLE_PATH = path.join(os.tmpdir(), 'disposable-domains.txt');
+    process.env.OPENVERIFY_EPHEMERAL_STORAGE = 'false';
+  });
+
+  afterEach(() => {
+    resetConfigCache();
+    process.env.OPENVERIFY_DATA_DIR = prev.data;
+    process.env.OPENVERIFY_DB_PATH = prev.db;
+    process.env.OPENVERIFY_UPLOAD_DIR = prev.upload;
+    process.env.OPENVERIFY_OUTPUT_DIR = prev.output;
+    process.env.OPENVERIFY_DISPOSABLE_PATH = prev.disposable;
+    process.env.OPENVERIFY_EPHEMERAL_STORAGE = 'false';
+  });
+
+  it('throws instead of creating /var/task/data/runtime', () => {
+    expect(() => loadConfig()).toThrow(/read-only deploy root/i);
+    expect(existsSync('/var/task/data/runtime')).toBe(false);
   });
 });

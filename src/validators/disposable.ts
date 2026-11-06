@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
-import { getConfig } from '../config/env.js';
+import { getConfig, isReadonlyDeployPath } from '../config/env.js';
 import { getLogger } from '../utils/logger.js';
 
 const log = getLogger('disposable');
@@ -42,20 +42,29 @@ const DEFAULT_SEED = [
 export function ensureDisposableDatasetFile(): string {
   const cfg = getConfig();
   const file = cfg.disposablePath;
-  mkdirSync(path.dirname(file), { recursive: true });
-  if (!existsSync(file)) {
-    const header = [
-      '# MailSure MCP disposable domain dataset',
-      '# Source: curated local seed (not downloaded per request)',
-      `# Updated: ${new Date().toISOString()}`,
-      '# One domain per line. Lines starting with # are comments.',
-      '',
-      ...DEFAULT_SEED,
-      '',
-    ].join('\n');
-    writeFileSync(file, header, 'utf8');
-    log.info({ file, count: DEFAULT_SEED.length }, 'Wrote seed disposable domain dataset');
+  if (existsSync(file)) {
+    return file;
   }
+  // Never mkdir under serverless package roots (e.g. /var/task). Ephemeral config
+  // remaps missing disposable paths to os.tmpdir(); packaged seeds are read-only OK.
+  if (isReadonlyDeployPath(file)) {
+    throw new Error(
+      `Disposable dataset missing under read-only deploy path: ${file}. ` +
+        `Enable OPENVERIFY_EPHEMERAL_STORAGE or set OPENVERIFY_DISPOSABLE_PATH to a writable file.`,
+    );
+  }
+  mkdirSync(path.dirname(file), { recursive: true });
+  const header = [
+    '# MailSure MCP disposable domain dataset',
+    '# Source: curated local seed (not downloaded per request)',
+    `# Updated: ${new Date().toISOString()}`,
+    '# One domain per line. Lines starting with # are comments.',
+    '',
+    ...DEFAULT_SEED,
+    '',
+  ].join('\n');
+  writeFileSync(file, header, 'utf8');
+  log.info({ file, count: DEFAULT_SEED.length }, 'Wrote seed disposable domain dataset');
   return file;
 }
 

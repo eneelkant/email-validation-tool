@@ -3,15 +3,41 @@ import { createMcpExpressApp } from '@modelcontextprotocol/express';
 import { toNodeHandler } from '@modelcontextprotocol/node';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
-import type { Express, Request, Response } from 'express';
+import type { Express, NextFunction, Request, Response } from 'express';
 import { describeDbBackend, getConfig } from '../config/env.js';
 import { createOpenVerifyServer } from '../mcp/server.js';
 import { assertHttpAuthConfig, requireHttpAuth } from '../security/auth.js';
 import { getLogger } from '../utils/logger.js';
 import { closeDb, getDb } from '../database/db.js';
+import {
+  getHealthStatus,
+  getRuntimeLifecycle,
+  isRuntimeReady,
+} from '../runtime/lifecycle.js';
 import { mountWebsiteApi } from './website-api.js';
 
 const log = getLogger('http');
+
+/**
+ * Gate DB-dependent routes until runtime init succeeds.
+ * Does not apply to /health, /ready, or /version.
+ */
+export function requireRuntimeReady(
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
+  if (isRuntimeReady()) {
+    next();
+    return;
+  }
+  const life = getRuntimeLifecycle();
+  res.status(503).json({
+    error: 'not_ready',
+    status: life.dbStatus === 'failed' ? 'degraded' : 'starting',
+    db_status: life.dbStatus,
+  });
+}
 
 /**
  * createMcpExpressApp `allowedOrigins` expects Origin *hostnames* (port-agnostic),
@@ -73,32 +99,52 @@ export function createHttpApp(): Express {
   );
 
   // Health endpoints — unauthenticated for orchestrators; no sensitive data.
+  // /health stays reachable during init (200 starting) and after failure (503 degraded)
+  // so platforms like Enzonic can complete cold-start probes without false "ready".
   app.get('/health', (_req: Request, res: Response) => {
-    res.json({
-      status: 'ok',
+    const life = getRuntimeLifecycle();
+    const status = getHealthStatus();
+    const body = {
+      status,
       service: 'mailsure-api',
       product: 'MailSure MCP',
       website_api: cfg.websiteApiEnabled,
       storage: cfg.ephemeralStorage ? 'ephemeral' : 'persistent',
       db: describeDbBackend(cfg.dbPath),
-    });
+      db_status: life.dbStatus,
+    };
+    if (status === 'degraded') {
+      res.status(503).json(body);
+      return;
+    }
+    res.json(body);
   });
 
   app.get('/ready', (_req: Request, res: Response) => {
+    const life = getRuntimeLifecycle();
+    if (life.dbStatus !== 'ready') {
+      res.status(503).json({
+        status: 'not_ready',
+        db_status: life.dbStatus,
+      });
+      return;
+    }
     try {
       getDb().prepare('SELECT 1 AS ok').get();
       res.json({
         status: 'ready',
         storage: cfg.ephemeralStorage ? 'ephemeral' : 'persistent',
         db: describeDbBackend(cfg.dbPath),
+        db_status: life.dbStatus,
       });
     } catch (err) {
       log.error({ err }, 'Readiness check failed');
-      res.status(503).json({ status: 'not_ready' });
+      res.status(503).json({ status: 'not_ready', db_status: 'failed' });
     }
   });
 
   app.get('/version', (_req: Request, res: Response) => {
+    const life = getRuntimeLifecycle();
     res.json({
       name: 'mailsure-mcp',
       version: cfg.version,
@@ -107,18 +153,26 @@ export function createHttpApp(): Express {
       website_api: cfg.websiteApiEnabled,
       storage: cfg.ephemeralStorage ? 'ephemeral' : 'persistent',
       db: describeDbBackend(cfg.dbPath),
+      db_status: life.dbStatus,
     });
   });
 
   // MailSure verify-only API (optional). Never mounts MCP admin tools.
+  // Gate before /api so verify routes cannot race SQLite init.
+  app.use('/api', requireRuntimeReady);
   mountWebsiteApi(app);
 
   const mcpHandler = createMcpHandler(() => createOpenVerifyServer());
   const nodeHandler = toNodeHandler(mcpHandler);
 
-  app.all(cfg.mcpPath, requireHttpAuth, (req: Request, res: Response) => {
-    void nodeHandler(req, res, req.body);
-  });
+  app.all(
+    cfg.mcpPath,
+    requireRuntimeReady,
+    requireHttpAuth,
+    (req: Request, res: Response) => {
+      void nodeHandler(req, res, req.body);
+    },
+  );
 
   return app;
 }

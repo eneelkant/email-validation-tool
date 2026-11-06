@@ -7,6 +7,13 @@
 | Exits immediately mentioning `OPENVERIFY_HTTP_AUTH_TOKEN` | Non-loopback bind without token | Set a strong token, or bind `127.0.0.1` for local-only |
 | Compose fails on interpolation | Token unset in `.env` | `echo 'OPENVERIFY_HTTP_AUTH_TOKEN=…' >> .env` |
 | Port in use | Another process on `OPENVERIFY_HTTP_PORT` | Change port or stop the other listener |
+| `ENOENT` / `EACCES` mkdir `/var/task/data/runtime` | Defaults resolved under read-only Enzonic/Lambda package root | Set `OPENVERIFY_EPHEMERAL_STORAGE=true` (remaps to `os.tmpdir()`), or point `OPENVERIFY_DATA_DIR` / DB / upload / output at a writable path |
+
+## Enzonic / Lambda `/var/task` ENOENT
+
+Enzonic Deploy and AWS Lambda package the app under **`/var/task`**, which is **read-only**. Relative defaults (`./data/runtime`) become `/var/task/data/runtime`. With `OPENVERIFY_EPHEMERAL_STORAGE=true`, MailSure remaps those paths into `os.tmpdir()` and never creates directories under `/var/task`. Render’s explicit `/data` paths are unchanged. See [mailsure-website.md](mailsure-website.md#enzonic-deploy-website-api--cors) for the website API + CORS env list.
+
+HTTP mode binds the listener **before** SQLite initialization so cold-start probes can hit `/health` (`status: "starting"`, HTTP 200). Use `/ready` for true readiness (`200` only after SQLite + disposable dataset load). DB-dependent `/api/*` and MCP routes return `503` until ready.
 
 ## MCP client cannot connect (STDIO)
 

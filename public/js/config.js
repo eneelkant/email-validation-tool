@@ -12,7 +12,8 @@
  *
  * Leave empty for GitHub Pages–only deploys — the UI shows a single clear
  * "backend unavailable" banner and never invents results. Never invent a
- * Render/onrender URL here.
+ * Render/onrender/Enzonic URL here. Set this only after GET /health succeeds
+ * on an origin you operate (website API + CORS configured).
  *
  * Do not put secrets, bearer tokens, or fabricated API URLs here.
  * After changing this file for Pages, merge to main so deploy-pages.yml publishes it.
