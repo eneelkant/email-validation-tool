@@ -32,6 +32,7 @@ All notable changes to MailSure MCP will be documented in this file.
 ### Fixed
 
 - Ephemeral storage on Enzonic/Lambda: `OPENVERIFY_EPHEMERAL_STORAGE=true` remaps `/var/task` (and `/var/runtime`) paths to `os.tmpdir()` so startup never `mkdir`s under the read-only package root; Render `/data` and local paths unchanged
+- HTTP transport binds and serves `/health` before SQLite/disposable init; `/ready` and DB-dependent `/api` + MCP routes stay 503 until ready (or degraded on init failure)
 - Cloud `PORT` without explicit `OPENVERIFY_HTTP_HOST` binds `0.0.0.0` (local default stays `127.0.0.1` when `PORT` unset)
 - CSV validation uses bounded-memory streaming batches (no full-file row array)
 - HTTP tests assert successful MCP initialize structure and Host-header rejection

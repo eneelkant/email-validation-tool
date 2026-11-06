@@ -13,6 +13,8 @@
 
 Enzonic Deploy and AWS Lambda package the app under **`/var/task`**, which is **read-only**. Relative defaults (`./data/runtime`) become `/var/task/data/runtime`. With `OPENVERIFY_EPHEMERAL_STORAGE=true`, MailSure remaps those paths into `os.tmpdir()` and never creates directories under `/var/task`. Render’s explicit `/data` paths are unchanged. See [mailsure-website.md](mailsure-website.md#enzonic-deploy-website-api--cors) for the website API + CORS env list.
 
+HTTP mode binds the listener **before** SQLite initialization so cold-start probes can hit `/health` (`status: "starting"`, HTTP 200). Use `/ready` for true readiness (`200` only after SQLite + disposable dataset load). DB-dependent `/api/*` and MCP routes return `503` until ready.
+
 ## MCP client cannot connect (STDIO)
 
 1. Confirm `npm run build` produced `dist/index.js`.
