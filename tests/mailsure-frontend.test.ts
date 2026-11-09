@@ -84,6 +84,25 @@ describe('MailSure frontend CSV helpers', () => {
   });
 });
 
+describe('MailSure published config.js', () => {
+  it('points Pages at the Enzonic website API without secrets or trailing slash', () => {
+    const raw = readFileSync(path.join(process.cwd(), 'public/js/config.js'), 'utf8');
+    expect(raw).toMatch(
+      /API_BASE_URL:\s*"https:\/\/email-validation-tool-8d370a7d\.enzonic\.dev"/,
+    );
+    expect(raw).not.toMatch(/API_BASE_URL:\s*"https:\/\/[^"]+\/"/);
+    // No env secrets or Authorization credentials in published frontend config.
+    expect(raw).not.toMatch(/OPENVERIFY_HTTP_AUTH_TOKEN\s*=/);
+    expect(raw).not.toMatch(/Authorization\s*:\s*['"]Bearer\s+/i);
+    // Evaluate published config the same way the browser loads it.
+    (0, eval)(raw);
+    expect(window.MAILSURE_CONFIG.API_BASE_URL).toBe(
+      'https://email-validation-tool-8d370a7d.enzonic.dev',
+    );
+    expect(String(window.MAILSURE_CONFIG.API_BASE_URL).endsWith('/')).toBe(false);
+  });
+});
+
 describe('MailSure API client', () => {
   beforeEach(() => {
     window.MAILSURE_CONFIG = Object.freeze({
@@ -103,6 +122,102 @@ describe('MailSure API client', () => {
     const health = await window.MailSureApi.checkHealth();
     expect(health).toEqual({ ok: false, reason: 'not_configured' });
     expect(window.MailSureApi.unavailableMessage('not_configured')).toMatch(/not configured/i);
+  });
+
+  it('builds verify URLs from configured API_BASE_URL and parses live-shaped results', async () => {
+    const base = 'https://email-validation-tool-8d370a7d.enzonic.dev';
+    window.MAILSURE_CONFIG = Object.freeze({ API_BASE_URL: base });
+    loadBrowserScript('public/js/verify.js');
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      expect(url).toBe(base + '/api/verify');
+      expect(init?.method).toBe('POST');
+      expect(init?.credentials).toBe('omit');
+      const headers = init?.headers as Record<string, string>;
+      expect(headers['content-type']).toMatch(/application\/json/i);
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            result: {
+              email: 'not-an-email',
+              normalized_email: 'not-an-email',
+              syntax_valid: false,
+              domain_exists: null,
+              mx_exists: null,
+              is_disposable: null,
+              is_role_based: null,
+              smtp_status: 'not_checked',
+              catch_all_status: 'not_checked',
+              overall_status: 'invalid_syntax',
+              confidence: 'high',
+              reason_codes: ['MISSING_AT'],
+              checked_at: '2026-11-09T00:00:00.000Z',
+            },
+          }),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const result = (await window.MailSureApi.verifyEmail('not-an-email')) as {
+      overall_status: string;
+      syntax_valid: boolean;
+    };
+    expect(result.syntax_valid).toBe(false);
+    expect(result.overall_status).toBe('invalid_syntax');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('posts CSV-derived emails to /api/verify/batch and returns typed results', async () => {
+    const base = 'https://email-validation-tool-8d370a7d.enzonic.dev';
+    window.MAILSURE_CONFIG = Object.freeze({ API_BASE_URL: base });
+    loadBrowserScript('public/js/verify.js');
+    const fetchMock = vi.fn(async (url: string) => {
+      expect(url).toBe(base + '/api/verify/batch');
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            count: 2,
+            results: [
+              {
+                email: 'bad',
+                normalized_email: 'bad',
+                syntax_valid: false,
+                domain_exists: null,
+                mx_exists: null,
+                is_disposable: null,
+                is_role_based: null,
+                smtp_status: 'not_checked',
+                catch_all_status: 'not_checked',
+                overall_status: 'invalid_syntax',
+                confidence: 'high',
+                reason_codes: ['MISSING_AT'],
+                checked_at: '2026-11-09T00:00:00.000Z',
+              },
+              {
+                email: 'also-bad',
+                normalized_email: 'also-bad',
+                syntax_valid: false,
+                domain_exists: null,
+                mx_exists: null,
+                is_disposable: null,
+                is_role_based: null,
+                smtp_status: 'not_checked',
+                catch_all_status: 'not_checked',
+                overall_status: 'invalid_syntax',
+                confidence: 'high',
+                reason_codes: ['MISSING_AT'],
+                checked_at: '2026-11-09T00:00:00.000Z',
+              },
+            ],
+          }),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const rows = await window.MailSureApi.verifyBatch(['bad', 'also-bad']);
+    expect(rows).toHaveLength(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('reports unreachable when fetch fails', async () => {
