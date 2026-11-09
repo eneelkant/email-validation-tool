@@ -193,19 +193,109 @@
     };
   }
 
+  function setCsvFilename(file) {
+    const label = $("#csv-filename");
+    if (!label) return;
+    if (file && file.name) {
+      label.textContent = file.name;
+      label.classList.add("has-file");
+    } else {
+      label.textContent = "No file selected";
+      label.classList.remove("has-file");
+    }
+  }
+
+  function setCsvFileError(message) {
+    const el = $("#csv-file-error");
+    if (!el) return;
+    if (message) {
+      el.hidden = false;
+      el.textContent = message;
+    } else {
+      el.hidden = true;
+      el.textContent = "";
+    }
+  }
+
+  function assignCsvFile(fileInput, file) {
+    if (!fileInput || !file) return;
+    try {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      fileInput.files = dt.files;
+    } catch (_err) {
+      // Some browsers disallow programmatic FileList assignment; change event still covers picker.
+    }
+    setCsvFilename(file);
+    try {
+      window.MailSureCsv.assertCsvFile(file);
+      setCsvFileError("");
+    } catch (err) {
+      setCsvFileError(err.message || "Unsupported file type. Please upload a .csv file.");
+    }
+  }
+
   function initBulkVerify() {
     const form = $("#bulk-verify-form");
     const results = $("#results");
     const banner = $("#verify-feedback");
     const downloadBtn = $("#download-csv");
+    const sampleBtn = $("#download-sample-csv");
+    const dropzone = $("#csv-dropzone");
+    const fileInput = $("#csv-input");
+    const submit = $("#bulk-submit") || (form && form.querySelector('button[type="submit"]'));
     const singleForm = $("#single-verify-form");
     if (!form) return;
+
+    if (sampleBtn) {
+      sampleBtn.addEventListener("click", () => {
+        window.MailSureCsv.downloadSampleCsv();
+      });
+    }
+
+    if (fileInput) {
+      fileInput.addEventListener("change", () => {
+        const file = fileInput.files && fileInput.files[0];
+        setCsvFilename(file || null);
+        if (!file) {
+          setCsvFileError("");
+          return;
+        }
+        try {
+          window.MailSureCsv.assertCsvFile(file);
+          setCsvFileError("");
+        } catch (err) {
+          setCsvFileError(err.message || "Unsupported file type. Please upload a .csv file.");
+        }
+      });
+    }
+
+    if (dropzone && fileInput) {
+      ["dragenter", "dragover"].forEach((type) => {
+        dropzone.addEventListener(type, (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          dropzone.classList.add("is-dragover");
+        });
+      });
+      ["dragleave", "drop"].forEach((type) => {
+        dropzone.addEventListener(type, (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          dropzone.classList.remove("is-dragover");
+        });
+      });
+      dropzone.addEventListener("drop", (ev) => {
+        const file = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+        if (!file) return;
+        assignCsvFile(fileInput, file);
+      });
+    }
 
     form.addEventListener("submit", async (ev) => {
       ev.preventDefault();
       hideBanner(banner);
-      const fileInput = $("#csv-input");
-      const submit = form.querySelector('button[type="submit"]');
+      setCsvFileError("");
       const file = fileInput && fileInput.files ? fileInput.files[0] : null;
       const cfg = window.MAILSURE_CONFIG || {};
 
@@ -215,7 +305,19 @@
         return;
       }
 
-      submit.disabled = true;
+      try {
+        window.MailSureCsv.assertCsvFile(file);
+      } catch (err) {
+        setCsvFileError(err.message || "Unsupported file type. Please upload a .csv file.");
+        showBanner(banner, "error", err.message || "Please upload a .csv file.");
+        return;
+      }
+
+      if (submit) submit.disabled = true;
+      if (sampleBtn) sampleBtn.disabled = true;
+      const previousLabel = submit ? submit.textContent : "";
+      if (submit) submit.textContent = "Verifying…";
+
       try {
         const { emails } = await window.MailSureCsv.extractEmailsFromCsvFile(file, {
           maxBytes: cfg.MAX_CSV_BYTES || 2 * 1024 * 1024,
@@ -248,10 +350,18 @@
         if (code && window.MailSureApi.isConnectionReason(code)) {
           handleConnectionIssue(code, banner);
         } else {
-          showBanner(banner, "error", err.message || "Bulk verification failed.");
+          const message = err.message || "Bulk verification failed.";
+          if (/csv|file|header|email column|unsupported/i.test(message)) {
+            setCsvFileError(message);
+          }
+          showBanner(banner, "error", message);
         }
       } finally {
-        submit.disabled = false;
+        if (submit) {
+          submit.disabled = false;
+          submit.textContent = previousLabel || "Verify CSV";
+        }
+        if (sampleBtn) sampleBtn.disabled = false;
       }
     });
   }
