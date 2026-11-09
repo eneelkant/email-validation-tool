@@ -3,13 +3,20 @@
  * MailSure MCP entrypoint.
  * Supports --transport stdio|http|both (or OPENVERIFY_TRANSPORT — env names kept for compatibility).
  * STDIO mode never writes banners to stdout.
+ *
+ * HTTP/both: bind the listener before SQLite/disposable init so cloud health probes
+ * (Enzonic / Render) are not blocked by cold-start DB work. DB-dependent routes wait
+ * until runtime is ready.
  */
 import { loadConfig } from './config/env.js';
 import { getLogger } from './utils/logger.js';
-import { getDb, closeDb } from './database/db.js';
-import { loadDisposableDomains } from './validators/disposable.js';
+import { closeDb } from './database/db.js';
 import { startStdioServer } from './mcp/stdio.js';
 import { startHttpServer } from './http/app.js';
+import {
+  beginRuntimeInitialization,
+  initializeRuntime,
+} from './runtime/lifecycle.js';
 
 function parseTransportArg(): string | undefined {
   const idx = process.argv.indexOf('--transport');
@@ -28,36 +35,33 @@ async function main(): Promise<void> {
   const cfg = loadConfig();
   const log = getLogger('main');
 
-  getDb();
-  loadDisposableDomains();
-
   const mode = cfg.transport;
 
   if (mode === 'stdio') {
+    // STDIO clients expect tools immediately — initialize before serving.
+    await initializeRuntime();
     await startStdioServer();
     return;
   }
 
-  if (mode === 'http') {
-    const http = await startHttpServer();
-    const shutdown = async () => {
-      log.info('Shutting down HTTP server');
-      await http.close();
-      process.exit(0);
-    };
-    process.once('SIGINT', () => void shutdown());
-    process.once('SIGTERM', () => void shutdown());
-    return;
+  // HTTP / both: listen first, then initialize runtime in the background.
+  beginRuntimeInitialization();
+  const http = await startHttpServer();
+
+  void initializeRuntime().catch((err) => {
+    // Failure is recorded on the lifecycle; keep the process alive so /health
+    // can report degraded and operators can diagnose without COLD_START_TIMEOUT.
+    log.error({ err }, 'Background runtime initialization failed');
+  });
+
+  if (mode === 'both') {
+    log.warn(
+      'Transport "both" starts HTTP in this process. For STDIO clients, run with --transport stdio.',
+    );
   }
 
-  // both
-  const http = await startHttpServer();
-  // STDIO in "both" is unusual for a single process; prefer HTTP here and
-  // document that Cursor/Claude should use the stdio entry separately.
-  log.warn(
-    'Transport "both" starts HTTP in this process. For STDIO clients, run with --transport stdio.',
-  );
   const shutdown = async () => {
+    log.info('Shutting down HTTP server');
     await http.close();
     closeDb();
     process.exit(0);
