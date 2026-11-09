@@ -34,15 +34,16 @@ Until the workflow has succeeded on `main`, do not claim production Pages deploy
 Edit **`public/js/config.js`** → `API_BASE_URL`:
 
 ```js
-API_BASE_URL: "" // e.g. "https://your-api.example.com" or "http://127.0.0.1:8787"
+API_BASE_URL: "https://email-validation-tool-8d370a7d.enzonic.dev" // no trailing slash
 ```
 
 | Value | Behavior |
 |-------|----------|
-| `""` (default for Pages) | Single **backend unavailable / not configured** banner; **never fabricates** ValidationResult data |
+| `""` | Single **backend unavailable / not configured** banner; **never fabricates** ValidationResult data |
 | `"http://127.0.0.1:8787"` | Local end-to-end against `npm run start:http` with website API enabled |
-| `"https://your-api.example.com"` | Production browser verify against your self-hosted origin |
+| `"https://…enzonic.dev"` / other self-hosted HTTPS origin | Production browser verify against that API |
 
+- Current Pages production points at the Enzonic website API origin above (CORS: `https://eneelkant.github.io`). Enzonic hostnames are **deployment-specific** — update `API_BASE_URL` if the backend redeploys under a new hostname.
 - Set `API_BASE_URL` only to an origin you operate with the website API enabled and CORS allowlisted.
 - No secrets, bearer tokens, or fake API URLs in frontend source.
 - After changing `config.js` for Pages, merge to `main` so the Pages workflow publishes it.
@@ -147,7 +148,7 @@ Frontend wiring: single form → `POST /api/verify`; bulk CSV → `POST /api/ver
 
 ### Blocker / limitation
 
-Public verify-from-Pages requires you (or an operator) to run MailSure HTTP (`mailsure-api`) somewhere with the website API + CORS configured. Until a real origin exists, use MCP locally; keep `API_BASE_URL` empty; the static site remains a documentation and UX surface without fake results.
+Public verify-from-Pages requires a live MailSure HTTP origin with website API + CORS. The GitHub Pages site is wired to the current Enzonic hostname in `public/js/config.js`. If that deployment hostname changes, update `API_BASE_URL` and republish Pages. Website bulk CSV is **browser-side** parse + `POST /api/verify/batch` (not MCP `verify_csv` jobs).
 
 ## ValidationResult fields shown
 
