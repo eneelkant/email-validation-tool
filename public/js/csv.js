@@ -7,6 +7,10 @@
 
   const FORMULA_PREFIX = "=@+-";
 
+  /** Canonical sample template — must stay in sync with public/MailSure-Sample-Email-List.csv */
+  const SAMPLE_CSV_FILENAME = "MailSure-Sample-Email-List.csv";
+  const SAMPLE_CSV_CONTENT = "Email\njohn@example.com\nalice@example.com\nsupport@example.org\n";
+
   function sanitizeCsvCell(value) {
     const s = String(value ?? "");
     if (s === "") return s;
@@ -88,6 +92,12 @@
     return rows;
   }
 
+  /**
+   * Locate the email column (case-insensitive preferred names, then fuzzy, then
+   * single-column first-column fallback). Returns -1 when no email column can be inferred.
+   * @param {string[]} header
+   * @returns {number}
+   */
   function findEmailColumnIndex(header) {
     const lower = header.map((h) => String(h).trim().toLowerCase());
     const preferred = ["email", "e-mail", "email_address", "email address", "mail"];
@@ -97,7 +107,19 @@
     }
     // Fallback: first column that looks like it contains emails in the header name
     const fuzzy = lower.findIndex((h) => h.includes("email") || h.includes("mail"));
-    return fuzzy >= 0 ? fuzzy : 0;
+    if (fuzzy >= 0) return fuzzy;
+    // Preserve single-column CSV support when the header is unlabeled / non-email
+    if (header.length === 1) return 0;
+    return -1;
+  }
+
+  function assertCsvFile(file) {
+    if (!file) {
+      throw new Error("No CSV file selected.");
+    }
+    if (!/\.csv$/i.test(file.name)) {
+      throw new Error("Unsupported file type. Please upload a .csv file.");
+    }
   }
 
   /**
@@ -105,12 +127,7 @@
    * @param {{ maxBytes: number, maxEmails: number }} limits
    */
   async function extractEmailsFromCsvFile(file, limits) {
-    if (!file) {
-      throw new Error("No CSV file selected.");
-    }
-    if (!/\.csv$/i.test(file.name) && file.type && !file.type.includes("csv") && file.type !== "text/plain") {
-      throw new Error("Please upload a .csv file.");
-    }
+    assertCsvFile(file);
     if (file.size > limits.maxBytes) {
       throw new Error(
         "CSV is too large for browser bulk verify (max " +
@@ -119,19 +136,30 @@
       );
     }
     const text = await file.text();
-    const rows = parseCsv(text);
+    if (!String(text || "").trim()) {
+      throw new Error("CSV file is empty. Include a header row and at least one email.");
+    }
+    const rows = parseCsv(text).filter((row) => row.some((cell) => String(cell).trim() !== ""));
+    if (rows.length === 0) {
+      throw new Error("CSV file is empty. Include a header row and at least one email.");
+    }
     if (rows.length < 2) {
       throw new Error("CSV needs a header row and at least one data row.");
     }
     const header = rows[0];
     const col = findEmailColumnIndex(header);
+    if (col < 0) {
+      throw new Error(
+        'Could not find an email column. Use a header named "Email" (also accepts email, e-mail, email_address, mail).',
+      );
+    }
     const emails = [];
     const seen = new Set();
     for (let r = 1; r < rows.length; r += 1) {
       const cell = (rows[r][col] ?? "").trim();
-      if (!cell) continue;
+      if (!cell) continue; // empty rows skipped safely
       const key = cell.toLowerCase();
-      if (seen.has(key)) continue;
+      if (seen.has(key)) continue; // duplicates collapsed; invalid emails still sent to API
       seen.add(key);
       emails.push(cell);
       if (emails.length > limits.maxEmails) {
@@ -197,11 +225,21 @@
     URL.revokeObjectURL(url);
   }
 
+  /** Browser-side sample template download (no backend request). */
+  function downloadSampleCsv() {
+    downloadText(SAMPLE_CSV_FILENAME, SAMPLE_CSV_CONTENT, "text/csv;charset=utf-8");
+  }
+
   global.MailSureCsv = {
+    SAMPLE_CSV_FILENAME,
+    SAMPLE_CSV_CONTENT,
     sanitizeCsvCell,
     parseCsv,
+    findEmailColumnIndex,
+    assertCsvFile,
     extractEmailsFromCsvFile,
     resultsToCsv,
     downloadText,
+    downloadSampleCsv,
   };
 })(window);

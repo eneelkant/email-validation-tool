@@ -122,13 +122,56 @@
 
             <div class="panel" role="tabpanel" id="panel-bulk" aria-labelledby="tab-bulk" hidden>
               <form class="verify-form" id="bulk-verify-form">
-                <label class="label" for="csv-input">CSV file (email column)</label>
-                <input id="csv-input" name="csv" type="file" accept=".csv,text/csv" />
-                <p class="hint">
-                  Browser bulk is capped (default 50 unique emails, 2&nbsp;MiB). For large lists, use the
-                  self-hosted MCP <code>verify_csv</code> tool. Downloads sanitize formula-like cells.
-                </p>
-                <button class="btn btn-primary" type="submit">Verify CSV</button>
+                <div class="bulk-layout">
+                  <div class="bulk-upload">
+                    <h3 class="bulk-heading" id="bulk-upload-heading">Upload CSV File</h3>
+                    <label class="csv-dropzone" id="csv-dropzone" for="csv-input">
+                      <input
+                        id="csv-input"
+                        name="csv"
+                        type="file"
+                        accept=".csv,text/csv"
+                        required
+                      />
+                      <span class="csv-dropzone-title">Choose a CSV file or drag it here</span>
+                      <span class="csv-dropzone-hint">Accepted format: <code>.csv</code> only</span>
+                      <span class="csv-filename" id="csv-filename" aria-live="polite">No file selected</span>
+                    </label>
+                    <p class="csv-file-error" id="csv-file-error" hidden role="alert"></p>
+                    <div class="bulk-actions">
+                      <button class="btn btn-primary" type="submit" id="bulk-submit">Verify CSV</button>
+                      <button class="btn btn-outline" type="button" id="download-sample-csv">
+                        Download Sample CSV
+                      </button>
+                    </div>
+                    <p class="hint">
+                      Browser bulk is capped (default 50 unique emails, 2&nbsp;MiB). For large lists, use the
+                      self-hosted MCP <code>verify_csv</code> tool. Result downloads sanitize formula-like cells.
+                    </p>
+                  </div>
+
+                  <aside class="csv-requirements" aria-labelledby="csv-requirements-heading">
+                    <h3 class="bulk-heading" id="csv-requirements-heading">CSV Format Requirements</h3>
+                    <ul class="csv-requirements-list">
+                      <li>File must be in <code>.csv</code> format (UTF-8).</li>
+                      <li>The first row must contain the email column header.</li>
+                      <li>Recommended column name: <strong>Email</strong> (case-insensitive; also accepts <code>email</code>, <code>e-mail</code>, <code>email_address</code>, <code>mail</code>).</li>
+                      <li>Each subsequent row should contain one email address.</li>
+                      <li>Additional columns are allowed; the email column is detected automatically.</li>
+                      <li>Empty rows are skipped. Invalid email values are validated and shown in results — not silently discarded.</li>
+                    </ul>
+                    <p class="csv-example-label">Example:</p>
+                    <pre class="csv-example" tabindex="0"><code>Email
+john@example.com
+alice@example.com
+support@example.org</code></pre>
+                    <p class="hint">
+                      Prefer
+                      <a href="MailSure-Sample-Email-List.csv" download="MailSure-Sample-Email-List.csv">MailSure-Sample-Email-List.csv</a>
+                      as a starting template.
+                    </p>
+                  </aside>
+                </div>
               </form>
             </div>
 
