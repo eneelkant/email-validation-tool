@@ -23,8 +23,13 @@ function mountVerifyDom(): void {
       <button type="submit">Verify</button>
     </form>
     <form id="bulk-verify-form">
-      <input id="csv-input" type="file" />
-      <button type="submit">Verify CSV</button>
+      <label id="csv-dropzone" class="csv-dropzone" for="csv-input">
+        <input id="csv-input" type="file" accept=".csv,text/csv" />
+        <span id="csv-filename">No file selected</span>
+      </label>
+      <p id="csv-file-error" hidden></p>
+      <button id="bulk-submit" type="submit">Verify CSV</button>
+      <button id="download-sample-csv" type="button">Download Sample CSV</button>
     </form>
     <button id="download-csv" type="button" hidden>Download</button>
   `;
@@ -63,15 +68,108 @@ describe('MailSure frontend CSV helpers', () => {
     expect(out).toContain('ok|mx');
   });
 
-  it('extracts unique emails from a CSV file with size/batch caps', async () => {
+  it('ships a matching sample CSV template and downloads it client-side', () => {
     const csv = window.MailSureCsv;
-    const content = 'email,name\na@x.com,A\nb@x.com,B\na@x.com,dup\n';
+    const disk = readFileSync(
+      path.join(process.cwd(), 'public/MailSure-Sample-Email-List.csv'),
+      'utf8',
+    );
+    expect(csv.SAMPLE_CSV_FILENAME).toBe('MailSure-Sample-Email-List.csv');
+    expect(csv.SAMPLE_CSV_CONTENT).toBe(
+      'Email\njohn@example.com\nalice@example.com\nsupport@example.org\n',
+    );
+    expect(disk.replace(/\r\n/g, '\n')).toBe(csv.SAMPLE_CSV_CONTENT);
+
+    const createObjectURL = vi.fn(() => 'blob:sample');
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL });
+    const click = vi.fn();
+    const originalCreate = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+      const el = originalCreate(tag);
+      if (tag === 'a') {
+        Object.defineProperty(el, 'click', { value: click });
+      }
+      return el;
+    });
+    csv.downloadSampleCsv();
+    expect(createObjectURL).toHaveBeenCalled();
+    expect(click).toHaveBeenCalled();
+    expect(revokeObjectURL).toHaveBeenCalled();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('parses the sample CSV Email header (case-insensitive aliases)', async () => {
+    const csv = window.MailSureCsv;
+    expect(csv.findEmailColumnIndex(['Email'])).toBe(0);
+    expect(csv.findEmailColumnIndex(['EMAIL'])).toBe(0);
+    expect(csv.findEmailColumnIndex(['e-mail'])).toBe(0);
+    expect(csv.findEmailColumnIndex(['name', 'email_address'])).toBe(1);
+
+    const file = new File([csv.SAMPLE_CSV_CONTENT], csv.SAMPLE_CSV_FILENAME, {
+      type: 'text/csv',
+    });
+    const { emails, emailColumn } = await csv.extractEmailsFromCsvFile(file, {
+      maxBytes: 1024,
+      maxEmails: 50,
+    });
+    expect(emailColumn).toBe(0);
+    expect(emails).toEqual([
+      'john@example.com',
+      'alice@example.com',
+      'support@example.org',
+    ]);
+  });
+
+  it('extracts unique emails from multi-column CSV and skips empty rows', async () => {
+    const csv = window.MailSureCsv;
+    const content = 'name,email\nA,a@x.com\nB,\nC,b@x.com\nD,a@x.com\n';
     const file = new File([content], 'list.csv', { type: 'text/csv' });
     const { emails } = await csv.extractEmailsFromCsvFile(file, {
       maxBytes: 1024,
       maxEmails: 50,
     });
     expect(emails).toEqual(['a@x.com', 'b@x.com']);
+  });
+
+  it('keeps invalid email values for API validation instead of discarding them', async () => {
+    const csv = window.MailSureCsv;
+    const content = 'Email\nnot-an-email\nvalid@example.com\n';
+    const file = new File([content], 'mixed.csv', { type: 'text/csv' });
+    const { emails } = await csv.extractEmailsFromCsvFile(file, {
+      maxBytes: 1024,
+      maxEmails: 50,
+    });
+    expect(emails).toEqual(['not-an-email', 'valid@example.com']);
+  });
+
+  it('rejects missing email header, empty CSV, and invalid extensions', async () => {
+    const csv = window.MailSureCsv;
+    await expect(
+      csv.extractEmailsFromCsvFile(
+        new File(['name,phone\nAda,555\n'], 'contacts.csv', { type: 'text/csv' }),
+        { maxBytes: 1024, maxEmails: 50 },
+      ),
+    ).rejects.toThrow(/email column/i);
+
+    await expect(
+      csv.extractEmailsFromCsvFile(new File([''], 'empty.csv', { type: 'text/csv' }), {
+        maxBytes: 1024,
+        maxEmails: 50,
+      }),
+    ).rejects.toThrow(/empty/i);
+
+    await expect(
+      csv.extractEmailsFromCsvFile(
+        new File(['Email\na@x.com\n'], 'notes.txt', { type: 'text/plain' }),
+        { maxBytes: 1024, maxEmails: 50 },
+      ),
+    ).rejects.toThrow(/\.csv/i);
+
+    expect(() =>
+      csv.assertCsvFile(new File(['x'], 'photo.png', { type: 'image/png' })),
+    ).toThrow(/Unsupported file type/i);
   });
 
   it('rejects oversized CSV uploads', async () => {
@@ -81,6 +179,25 @@ describe('MailSure frontend CSV helpers', () => {
     await expect(
       csv.extractEmailsFromCsvFile(file, { maxBytes: 100, maxEmails: 50 }),
     ).rejects.toThrow(/too large/i);
+  });
+});
+
+describe('MailSure published config.js', () => {
+  it('points Pages at the Enzonic website API without secrets or trailing slash', () => {
+    const raw = readFileSync(path.join(process.cwd(), 'public/js/config.js'), 'utf8');
+    expect(raw).toMatch(
+      /API_BASE_URL:\s*"https:\/\/email-validation-tool-8d370a7d\.enzonic\.dev"/,
+    );
+    expect(raw).not.toMatch(/API_BASE_URL:\s*"https:\/\/[^"]+\/"/);
+    // No env secrets or Authorization credentials in published frontend config.
+    expect(raw).not.toMatch(/OPENVERIFY_HTTP_AUTH_TOKEN\s*=/);
+    expect(raw).not.toMatch(/Authorization\s*:\s*['"]Bearer\s+/i);
+    // Evaluate published config the same way the browser loads it.
+    (0, eval)(raw);
+    expect(window.MAILSURE_CONFIG.API_BASE_URL).toBe(
+      'https://email-validation-tool-8d370a7d.enzonic.dev',
+    );
+    expect(String(window.MAILSURE_CONFIG.API_BASE_URL).endsWith('/')).toBe(false);
   });
 });
 
@@ -103,6 +220,102 @@ describe('MailSure API client', () => {
     const health = await window.MailSureApi.checkHealth();
     expect(health).toEqual({ ok: false, reason: 'not_configured' });
     expect(window.MailSureApi.unavailableMessage('not_configured')).toMatch(/not configured/i);
+  });
+
+  it('builds verify URLs from configured API_BASE_URL and parses live-shaped results', async () => {
+    const base = 'https://email-validation-tool-8d370a7d.enzonic.dev';
+    window.MAILSURE_CONFIG = Object.freeze({ API_BASE_URL: base });
+    loadBrowserScript('public/js/verify.js');
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      expect(url).toBe(base + '/api/verify');
+      expect(init?.method).toBe('POST');
+      expect(init?.credentials).toBe('omit');
+      const headers = init?.headers as Record<string, string>;
+      expect(headers['content-type']).toMatch(/application\/json/i);
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            result: {
+              email: 'not-an-email',
+              normalized_email: 'not-an-email',
+              syntax_valid: false,
+              domain_exists: null,
+              mx_exists: null,
+              is_disposable: null,
+              is_role_based: null,
+              smtp_status: 'not_checked',
+              catch_all_status: 'not_checked',
+              overall_status: 'invalid_syntax',
+              confidence: 'high',
+              reason_codes: ['MISSING_AT'],
+              checked_at: '2026-11-09T00:00:00.000Z',
+            },
+          }),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const result = (await window.MailSureApi.verifyEmail('not-an-email')) as {
+      overall_status: string;
+      syntax_valid: boolean;
+    };
+    expect(result.syntax_valid).toBe(false);
+    expect(result.overall_status).toBe('invalid_syntax');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('posts CSV-derived emails to /api/verify/batch and returns typed results', async () => {
+    const base = 'https://email-validation-tool-8d370a7d.enzonic.dev';
+    window.MAILSURE_CONFIG = Object.freeze({ API_BASE_URL: base });
+    loadBrowserScript('public/js/verify.js');
+    const fetchMock = vi.fn(async (url: string) => {
+      expect(url).toBe(base + '/api/verify/batch');
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            count: 2,
+            results: [
+              {
+                email: 'bad',
+                normalized_email: 'bad',
+                syntax_valid: false,
+                domain_exists: null,
+                mx_exists: null,
+                is_disposable: null,
+                is_role_based: null,
+                smtp_status: 'not_checked',
+                catch_all_status: 'not_checked',
+                overall_status: 'invalid_syntax',
+                confidence: 'high',
+                reason_codes: ['MISSING_AT'],
+                checked_at: '2026-11-09T00:00:00.000Z',
+              },
+              {
+                email: 'also-bad',
+                normalized_email: 'also-bad',
+                syntax_valid: false,
+                domain_exists: null,
+                mx_exists: null,
+                is_disposable: null,
+                is_role_based: null,
+                smtp_status: 'not_checked',
+                catch_all_status: 'not_checked',
+                overall_status: 'invalid_syntax',
+                confidence: 'high',
+                reason_codes: ['MISSING_AT'],
+                checked_at: '2026-11-09T00:00:00.000Z',
+              },
+            ],
+          }),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const rows = await window.MailSureApi.verifyBatch(['bad', 'also-bad']);
+    expect(rows).toHaveLength(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('reports unreachable when fetch fails', async () => {
@@ -230,14 +443,19 @@ declare global {
       escapeHtml: (value: unknown) => string;
     };
     MailSureCsv: {
+      SAMPLE_CSV_FILENAME: string;
+      SAMPLE_CSV_CONTENT: string;
       sanitizeCsvCell: (value: unknown) => string;
       parseCsv: (text: string) => string[][];
+      findEmailColumnIndex: (header: string[]) => number;
+      assertCsvFile: (file: File | null | undefined) => void;
       extractEmailsFromCsvFile: (
         file: File,
         limits: { maxBytes: number; maxEmails: number },
-      ) => Promise<{ emails: string[] }>;
+      ) => Promise<{ emails: string[]; header: string[]; emailColumn: number }>;
       resultsToCsv: (results: Array<Record<string, unknown>>) => string;
       downloadText: (filename: string, text: string, mime?: string) => void;
+      downloadSampleCsv: () => void;
     };
   }
 }
