@@ -10,6 +10,7 @@ import {
   checkEmailWithReacher,
   classifyReachability,
   fetchWithSafeTimeout,
+  isReacherProxyTimeoutError,
   mapReacherCatchAll,
   mapReacherSmtpToDiag,
   ReacherResponseSchema,
@@ -17,6 +18,13 @@ import {
   safeReacherTimeoutMs,
 } from '../src/validators/reacher.js';
 
+/** Exact real-world Socks5 proxy timeout body (os error 110). */
+const SOCKS5_TIMED_OUT_SMTP = {
+  error: {
+    type: 'Socks5',
+    message: 'i/o error: Operation timed out (os error 110)',
+  },
+} as const;
 describe('normalizeReacherApiUrl / assertReacherConfig', () => {
   afterEach(() => {
     resetConfigCache();
@@ -154,6 +162,66 @@ describe('mapReacherSmtpToDiag / catch-all', () => {
     expect(r.reason_codes).toContain('REACHER_SMTP_ERROR');
     expect(r.reason_codes).toContain('REACHER_SMTP_TRANSIENT');
     expect(r.reason_codes).toContain('REACHER_ERR_AsyncSmtpError');
+  });
+
+  it('maps Socks5 "Operation timed out" → temporary_error (not only "timeout")', () => {
+    // Regression: "timed out" does not contain substring "timeout"
+    expect(SOCKS5_TIMED_OUT_SMTP.error.message.includes('timeout')).toBe(false);
+    expect(SOCKS5_TIMED_OUT_SMTP.error.message.toLowerCase().includes('timed out')).toBe(
+      true,
+    );
+
+    const parsed = ReacherResponseSchema.safeParse({
+      input: 'a@example.com',
+      is_reachable: 'unknown',
+      smtp: SOCKS5_TIMED_OUT_SMTP,
+      misc: { is_disposable: false, is_role_account: false },
+      mx: { accepts_mail: true, records: ['mail.example.com.'] },
+      syntax: { domain: 'example.com', is_valid_syntax: true, username: 'a' },
+    });
+    expect(parsed.success).toBe(true);
+
+    const r = mapReacherSmtpToDiag(SOCKS5_TIMED_OUT_SMTP);
+    expect(r.status).toBe('temporary_error');
+    expect(r.status).not.toBe('invalid');
+    expect(r.reason_codes).toContain('REACHER_SMTP_TRANSIENT');
+    expect(r.reason_codes).toContain('REACHER_ERR_Socks5');
+    expect(isReacherProxyTimeoutError(SOCKS5_TIMED_OUT_SMTP)).toBe(true);
+  });
+
+  it('checkEmailWithReacher marks Socks5 timed-out body as transportFailed for fallback', async () => {
+    process.env.REACHER_ENABLED = 'true';
+    process.env.REACHER_API_URL = 'https://reacher.test';
+    resetConfigCache();
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            input: 'a@example.com',
+            is_reachable: 'unknown',
+            smtp: SOCKS5_TIMED_OUT_SMTP,
+            misc: { is_disposable: false, is_role_account: false },
+            mx: { accepts_mail: true, records: ['mail.example.com.'] },
+            syntax: {
+              domain: 'example.com',
+              is_valid_syntax: true,
+              username: 'a',
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+    );
+    const result = await checkEmailWithReacher(
+      'a@example.com',
+      loadConfig(),
+      fetchMock as unknown as typeof fetch,
+    );
+    expect(result.smtp.status).toBe('temporary_error');
+    expect(result.smtp.status).not.toBe('invalid');
+    expect(result.transportFailed).toBe(true);
+    process.env.REACHER_ENABLED = 'false';
+    process.env.REACHER_API_URL = '';
+    resetConfigCache();
   });
 
   it('maps nested smtp.error with description (IpBlacklisted) → unknown, not Invalid', () => {

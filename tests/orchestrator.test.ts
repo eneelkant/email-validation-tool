@@ -205,4 +205,73 @@ describe('validateEmail Reacher integration', () => {
     expect(reacherCheck).not.toHaveBeenCalled();
     expect(r.overall_status).toBe('no_mx');
   });
+
+  it('Socks5 Operation timed out → temporary_error and local SMTP fallback when enabled', async () => {
+    process.env.OPENVERIFY_SMTP_ENABLED = 'true';
+    process.env.OPENVERIFY_SMTP_TIMEOUT_MS = '500';
+    resetConfigCache();
+    loadConfig();
+
+    // Exact proxy timeout shape: HTTP 200 body with nested smtp.error
+    const reacherCheck = vi.fn(async (): Promise<ReacherCheckResult> => ({
+      transportFailed: true,
+      smtp: {
+        status: 'temporary_error',
+        reason_codes: [
+          'REACHER_SMTP_ERROR',
+          'REACHER_ERR_Socks5',
+          'REACHER_SMTP_TRANSIENT',
+        ],
+      },
+      catch_all_status: 'not_checked',
+      catch_all_reason_codes: ['REACHER_CATCH_ALL_SKIPPED'],
+      is_reachable_hint: 'unknown',
+    }));
+
+    const dns: DnsLookupResult = { ...goodDns, mx_hosts: ['127.0.0.1'] };
+    const r = await validateEmail('john@example.com', {
+      dnsLookup: async () => dns,
+      enableReacher: true,
+      enableSmtp: true,
+      reacherCheck,
+    });
+
+    expect(reacherCheck).toHaveBeenCalledTimes(1);
+    expect(r.reason_codes).toContain('REACHER_FALLBACK_LOCAL_SMTP');
+    expect(r.reason_codes).toContain('REACHER_SMTP_TRANSIENT');
+    expect(r.smtp_status).not.toBe('invalid');
+    expect(r.overall_status).not.toBe('invalid_domain');
+    // Must never become Invalid solely from the Socks5 proxy timeout
+    expect(['risky', 'unknown', 'valid_domain', 'temporary_error']).toContain(r.overall_status);
+
+    process.env.OPENVERIFY_SMTP_TIMEOUT_MS = '5000';
+  });
+
+  it('Socks5 timed out without local SMTP stays temporary/risky — never Invalid', async () => {
+    const reacherCheck = vi.fn(async (): Promise<ReacherCheckResult> => ({
+      transportFailed: true,
+      smtp: {
+        status: 'temporary_error',
+        reason_codes: [
+          'REACHER_SMTP_ERROR',
+          'REACHER_ERR_Socks5',
+          'REACHER_SMTP_TRANSIENT',
+        ],
+      },
+      catch_all_status: 'not_checked',
+      catch_all_reason_codes: ['REACHER_CATCH_ALL_SKIPPED'],
+    }));
+
+    const r = await validateEmail('john@example.com', {
+      dnsLookup: async () => goodDns,
+      enableReacher: true,
+      enableSmtp: false,
+      reacherCheck,
+    });
+
+    expect(r.smtp_status).toBe('temporary_error');
+    expect(r.overall_status).toBe('risky');
+    expect(r.overall_status).not.toBe('invalid_domain');
+    expect(r.smtp_status).not.toBe('invalid');
+  });
 });

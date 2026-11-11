@@ -160,12 +160,30 @@ function mapCoreErrorToDiag(
   if (err.description) {
     reason_codes.push(`REACHER_DESC_${err.description.slice(0, 40)}`);
   }
-  // Transient SMTP / timeout-like messages → temporary_error (never Invalid)
-  if (/transient|timeout|temporar|greylist|try again|4\.\d\.\d/i.test(err.message)) {
+  // Transient SMTP / timeout-like messages → temporary_error (never Invalid).
+  // Include "timed out" (Socks5 / os error 110) — that phrase does NOT contain "timeout".
+  if (
+    /transient|timed\s*out|timeout|temporar|greylist|try again|4\.\d\.\d|os error 110/i.test(
+      `${err.message} ${err.description ?? ''}`,
+    )
+  ) {
     reason_codes.push('REACHER_SMTP_TRANSIENT');
     return { status: 'temporary_error', reason_codes };
   }
   return { status: 'unknown', reason_codes };
+}
+
+/**
+ * True when nested/flat smtp CoreError is a proxy/I/O timeout worth local SMTP fallback.
+ * Example: type Socks5, message "i/o error: Operation timed out (os error 110)".
+ */
+export function isReacherProxyTimeoutError(
+  smtp: ReacherSmtpField | undefined,
+): boolean {
+  const err = extractSmtpCoreError(smtp);
+  if (!err) return false;
+  const haystack = `${err.type} ${err.message} ${err.description ?? ''}`;
+  return /timed\s*out|timeout|socks|i\/o error|os error 110/i.test(haystack);
 }
 
 /**
@@ -363,9 +381,11 @@ export async function checkEmailWithReacher(
     ];
     const smtp = mapReacherSmtpToDiag(data.smtp, hintExtras);
     const catchAll = mapReacherCatchAll(data.smtp);
+    // Proxy/Socks5 timed-out bodies are HTTP 200 but inconclusive — allow local SMTP fallback.
+    const proxyTimedOut = isReacherProxyTimeoutError(data.smtp);
 
     return {
-      transportFailed: false,
+      transportFailed: proxyTimedOut,
       smtp,
       catch_all_status: catchAll.status,
       catch_all_reason_codes: catchAll.reason_codes,
