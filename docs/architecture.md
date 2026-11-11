@@ -5,7 +5,7 @@ MailSure MCP is a modular TypeScript service (product identity **MailSure**; env
 ```
 src/
   config/       Environment + defaults
-  validators/   Syntax, DNS, disposable, role, SMTP, catch-all, orchestrator
+  validators/   Syntax, DNS, disposable, role, SMTP, Reacher (optional), catch-all, orchestrator
   database/     SQLite + versioned migrations
   processing/   Batch + CSV jobs
   mcp/          MCP server factory + tools + STDIO
@@ -15,6 +15,10 @@ src/
   utils/        Logger, concurrency
 public/         MailSure static site (GitHub Pages)
 ```
+
+## Optional remote SMTP (Reacher)
+
+When `REACHER_ENABLED=true`, the orchestrator calls a **separate** Reacher deploy (`POST {REACHER_API_URL}/v1/check_email`) after syntax + DNS succeed, instead of local port-25 on the happy path. Reacher stays in its own repo/service — MailSure does not vendor or merge it. Local `OPENVERIFY_SMTP_ENABLED` remains a **fallback** if Reacher times out or errors. Failures map to `temporary_error` / `unknown` — never false Invalid. See [validation-statuses.md](./validation-statuses.md) and [validation-limitations.md](./validation-limitations.md).
 
 ## Transports
 

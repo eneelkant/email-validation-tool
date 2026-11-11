@@ -1,19 +1,29 @@
 import type { AppConfig } from '../config/env.js';
 import { getConfig } from '../config/env.js';
 import type { Confidence, OverallStatus, ValidationResult } from '../types/results.js';
-import { detectCatchAll } from './catch-all.js';
+import { detectCatchAll, type CatchAllResult } from './catch-all.js';
 import { lookupDomainDns } from './dns.js';
 import { isDisposableDomain } from './disposable.js';
+import {
+  checkEmailWithReacher,
+  type ReacherCheckResult,
+} from './reacher.js';
 import { isRoleBasedLocalPart } from './role.js';
-import { diagnoseSmtp } from './smtp.js';
+import { diagnoseSmtp, type SmtpDiagResult } from './smtp.js';
 import { validateSyntax } from './syntax.js';
 
 export type ValidateOptions = {
   skipCache?: boolean;
   enableSmtp?: boolean;
   enableCatchAll?: boolean;
+  enableReacher?: boolean;
   /** Injected DNS override for tests */
   dnsLookup?: typeof lookupDomainDns;
+  /** Injected Reacher client for tests (mocked; never live quota in CI) */
+  reacherCheck?: (
+    email: string,
+    config: AppConfig,
+  ) => Promise<ReacherCheckResult>;
 };
 
 export async function validateEmail(
@@ -52,17 +62,16 @@ export async function validateEmail(
   if (disposable) reason_codes.push('DISPOSABLE_DOMAIN');
   if (role) reason_codes.push('ROLE_BASED');
 
-  const smtp_status = await (async () => {
-    const wantSmtp = options.enableSmtp ?? config.smtpEnabled;
-    if (!wantSmtp) return diagnoseSmtp(syntax.normalized_email, []);
-    return diagnoseSmtp(syntax.normalized_email, dns.mx_hosts);
-  })();
-
-  const catch_all_status = await (async () => {
-    const want = options.enableCatchAll ?? config.catchAllEnabled;
-    if (!want) return detectCatchAll(syntax.domain, []);
-    return detectCatchAll(syntax.domain, dns.mx_hosts);
-  })();
+  const { smtp_status, catch_all_status } = await resolveSmtpAndCatchAll({
+    email: syntax.normalized_email,
+    domain: syntax.domain,
+    mxHosts: dns.mx_hosts,
+    dnsTemporary: dns.temporary,
+    domainExists: dns.domain_exists,
+    mxExists: dns.mx_exists,
+    options,
+    config,
+  });
 
   if (smtp_status.reason_codes.length) reason_codes.push(...smtp_status.reason_codes);
   if (catch_all_status.reason_codes.length) reason_codes.push(...catch_all_status.reason_codes);
@@ -93,6 +102,89 @@ export async function validateEmail(
     checked_at,
     mx_hosts: dns.mx_hosts,
   };
+}
+
+async function resolveSmtpAndCatchAll(input: {
+  email: string;
+  domain: string;
+  mxHosts: string[];
+  dnsTemporary: boolean;
+  domainExists: boolean | null;
+  mxExists: boolean | null;
+  options: ValidateOptions;
+  config: AppConfig;
+}): Promise<{ smtp_status: SmtpDiagResult; catch_all_status: CatchAllResult }> {
+  const { options, config } = input;
+  const wantReacher = options.enableReacher ?? config.reacherEnabled;
+  const wantSmtp = options.enableSmtp ?? config.smtpEnabled;
+  const wantCatchAll = options.enableCatchAll ?? config.catchAllEnabled;
+
+  const canProbeRemote =
+    !input.dnsTemporary &&
+    input.domainExists === true &&
+    input.mxExists === true;
+
+  // Reacher path (preferred over local SMTP on the happy path).
+  if (wantReacher && canProbeRemote) {
+    const reacherFn = options.reacherCheck ?? checkEmailWithReacher;
+    const reacher = await reacherFn(input.email, config);
+
+    if (!reacher.transportFailed) {
+      const catch_all_status: CatchAllResult = wantCatchAll
+        ? {
+            status: reacher.catch_all_status,
+            reason_codes: reacher.catch_all_reason_codes,
+          }
+        : { status: 'not_checked', reason_codes: ['CATCH_ALL_DISABLED'] };
+
+      return { smtp_status: reacher.smtp, catch_all_status };
+    }
+
+    // Transport/timeout/parse failure: optional local SMTP fallback.
+    // Never treat Reacher failure as Invalid (reacher.smtp is temporary/unknown).
+    if (wantSmtp) {
+      const smtp_status = await diagnoseSmtp(input.email, input.mxHosts);
+      const catch_all_status = wantCatchAll
+        ? await detectCatchAll(input.domain, input.mxHosts)
+        : { status: 'not_checked' as const, reason_codes: ['CATCH_ALL_DISABLED'] };
+      // Preserve Reacher failure reasons alongside local probe results.
+      return {
+        smtp_status: {
+          status: smtp_status.status,
+          reason_codes: [
+            ...reacher.smtp.reason_codes,
+            'REACHER_FALLBACK_LOCAL_SMTP',
+            ...smtp_status.reason_codes,
+          ],
+          banner: smtp_status.banner,
+        },
+        catch_all_status,
+      };
+    }
+
+    return {
+      smtp_status: reacher.smtp,
+      catch_all_status: {
+        status: 'not_checked',
+        reason_codes: wantCatchAll
+          ? ['CATCH_ALL_SKIPPED_AFTER_REACHER_FAIL']
+          : ['CATCH_ALL_DISABLED'],
+      },
+    };
+  }
+
+  // Legacy local SMTP / catch-all path (REACHER_ENABLED=false → identical to pre-Reacher).
+  const smtp_status = await (async () => {
+    if (!wantSmtp) return diagnoseSmtp(input.email, []);
+    return diagnoseSmtp(input.email, input.mxHosts);
+  })();
+
+  const catch_all_status = await (async () => {
+    if (!wantCatchAll) return detectCatchAll(input.domain, []);
+    return detectCatchAll(input.domain, input.mxHosts);
+  })();
+
+  return { smtp_status, catch_all_status };
 }
 
 function decideOverall(input: {

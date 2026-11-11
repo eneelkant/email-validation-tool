@@ -92,6 +92,18 @@ npm run build && npm run start:http
 curl -s http://127.0.0.1:10000/health
 ```
 
+## Optional Reacher SMTP (separate service)
+
+MailSure can call a **separate** Reacher deploy for SMTP diagnostics without merging that repo:
+
+| Env | Notes |
+|-----|--------|
+| `REACHER_ENABLED` | Default `false` (unchanged behavior) |
+| `REACHER_API_URL` | Origin only, e.g. `https://reacher-render-deploy.onrender.com` |
+| `REACHER_TIMEOUT` | Milliseconds (default `15000`) |
+
+Set these in the MailSure Render dashboard after your Reacher web service is up. Reacher stays in `eneelkant/reacher-render-deploy`. Prefer leaving Reacher off on free-tier until cold-start latency is acceptable. See [validation-limitations.md](validation-limitations.md).
+
 ## Related docs
 
 - [MailSure website](mailsure-website.md)
