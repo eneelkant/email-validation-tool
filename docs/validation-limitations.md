@@ -35,7 +35,9 @@ Full status table: [validation-statuses.md](./validation-statuses.md).
 - Precedence: Reacher first; local SMTP only as fallback when Reacher fails **and** `OPENVERIFY_SMTP_ENABLED=true`.
 - Failures/timeouts → `temporary_error` / `unknown` / overall `risky|unknown` — **never** false Invalid.
 - Do not treat Reacher `is_reachable` as MailSure’s verdict.
-- Render Free Reacher instances may **cold-start** (multi-second to minute); keep timeouts modest or use an always-on instance.
+- Nested Reacher SMTP errors (`smtp.error: { type, message }`, optional `description`) are accepted and mapped to `unknown` / `temporary_error` — not schema-mismatch Invalid.
+- **Safe timeout:** sync `POST /v1/check_email` uses AbortController + Promise.race (`fetchWithSafeTimeout`). Default `REACHER_TIMEOUT=15000`, hard-capped at **60s**. Budget expiry → `REACHER_TIMEOUT` / `temporary_error` (request aborted; no hang). There is no separate Reacher job-poll API on this path — fail-soft within the budget is the async-safe client strategy.
+- Render Free Reacher instances may **cold-start**; raise `REACHER_TIMEOUT` toward 60000 or use an always-on instance.
 - Trial image quota (~10k/day) and anonymized metrics — see Reacher trial terms. Lower `OPENVERIFY_CONCURRENCY` when Reacher is enabled.
 
 ## Domain validity vs mailbox verification

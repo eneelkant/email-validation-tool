@@ -10,6 +10,9 @@ const log = getLogger('reacher');
 /** MailSure-owned Safe/Risky/Invalid/Unknown facet — never a copy of Reacher `is_reachable`. */
 export type ReachabilityClass = 'safe' | 'risky' | 'invalid' | 'unknown';
 
+/** Absolute ceiling so operators cannot hang website/MCP requests unboundedly. */
+export const REACHER_TIMEOUT_MAX_MS = 60_000;
+
 const CoreErrorSchema = z.object({
   type: z.string(),
   message: z.string(),
@@ -23,16 +26,42 @@ const SmtpDetailsSchema = z.object({
   is_disabled: z.boolean(),
 });
 
+/**
+ * Real Reacher/check-if-email-exists responses often serialize SMTP `Err` as nested:
+ *   { "smtp": { "error": { "type": "AsyncSmtpError", "message": "..." }, "description": "..." } }
+ * OpenAPI also documents a flat CoreError at the `smtp` field. Accept both.
+ */
+const SmtpNestedErrorSchema = z.object({
+  error: CoreErrorSchema,
+  description: z.string().optional(),
+});
+
 const MiscDetailsSchema = z.object({
   is_disposable: z.boolean().optional(),
   is_role_account: z.boolean().optional(),
 });
 
-const ReacherResponseSchema = z.object({
+const SmtpFieldSchema = z.union([
+  SmtpDetailsSchema,
+  SmtpNestedErrorSchema,
+  CoreErrorSchema,
+]);
+
+export const ReacherResponseSchema = z.object({
   input: z.string().optional(),
   is_reachable: z.enum(['safe', 'risky', 'invalid', 'unknown']).optional(),
-  misc: z.union([MiscDetailsSchema, CoreErrorSchema]).optional(),
-  smtp: z.union([SmtpDetailsSchema, CoreErrorSchema]).optional(),
+  misc: z.union([MiscDetailsSchema, CoreErrorSchema, SmtpNestedErrorSchema]).optional(),
+  mx: z
+    .union([
+      z.object({
+        accepts_mail: z.boolean().optional(),
+        records: z.array(z.string()).optional(),
+      }),
+      CoreErrorSchema,
+      SmtpNestedErrorSchema,
+    ])
+    .optional(),
+  smtp: SmtpFieldSchema.optional(),
   syntax: z
     .object({
       is_valid_syntax: z.boolean().optional(),
@@ -41,6 +70,9 @@ const ReacherResponseSchema = z.object({
     })
     .optional(),
 });
+
+export type ReacherSmtpField = z.infer<typeof SmtpFieldSchema>;
+export type ReacherCoreError = z.infer<typeof CoreErrorSchema>;
 
 export type ReacherCheckResult = {
   /** True when HTTP/timeout/parse failed — callers may fall back to local SMTP. */
@@ -53,6 +85,42 @@ export type ReacherCheckResult = {
 };
 
 export type ReacherFetch = typeof fetch;
+
+function isCoreError(value: unknown): value is ReacherCoreError {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'type' in value &&
+    'message' in value &&
+    !('can_connect_smtp' in value) &&
+    !('error' in value)
+  );
+}
+
+function isNestedSmtpError(
+  value: unknown,
+): value is z.infer<typeof SmtpNestedErrorSchema> {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'error' in value &&
+    typeof (value as { error: unknown }).error === 'object' &&
+    (value as { error: { type?: unknown } }).error !== null &&
+    'type' in ((value as { error: object }).error ?? {}) &&
+    'message' in ((value as { error: object }).error ?? {})
+  );
+}
+
+function extractSmtpCoreError(
+  smtp: ReacherSmtpField | undefined,
+): (ReacherCoreError & { description?: string }) | null {
+  if (!smtp) return null;
+  if (isNestedSmtpError(smtp)) {
+    return { ...smtp.error, description: smtp.description };
+  }
+  if (isCoreError(smtp)) return smtp;
+  return null;
+}
 
 /**
  * Map MailSure validation signals to Safe/Risky/Invalid/Unknown.
@@ -80,26 +148,41 @@ export function classifyReachability(signals: {
   return 'unknown';
 }
 
+function mapCoreErrorToDiag(
+  err: ReacherCoreError & { description?: string },
+  extras: string[],
+): SmtpDiagResult {
+  const reason_codes = [
+    'REACHER_SMTP_ERROR',
+    `REACHER_ERR_${err.type.slice(0, 40)}`,
+    ...extras,
+  ];
+  if (err.description) {
+    reason_codes.push(`REACHER_DESC_${err.description.slice(0, 40)}`);
+  }
+  // Transient SMTP / timeout-like messages → temporary_error (never Invalid)
+  if (/transient|timeout|temporar|greylist|try again|4\.\d\.\d/i.test(err.message)) {
+    reason_codes.push('REACHER_SMTP_TRANSIENT');
+    return { status: 'temporary_error', reason_codes };
+  }
+  return { status: 'unknown', reason_codes };
+}
+
 /**
- * Map Reacher SMTP details into MailSure smtp_status.
+ * Map Reacher SMTP details / nested smtp.error into MailSure smtp_status.
  * Source of truth is smtp.* fields — not is_reachable.
  */
 export function mapReacherSmtpToDiag(
-  smtp: z.infer<typeof SmtpDetailsSchema> | z.infer<typeof CoreErrorSchema> | undefined,
+  smtp: ReacherSmtpField | undefined,
   extras: string[] = [],
 ): SmtpDiagResult {
   if (!smtp) {
     return { status: 'unknown', reason_codes: ['REACHER_SMTP_MISSING', ...extras] };
   }
-  if ('type' in smtp && 'message' in smtp && !('can_connect_smtp' in smtp)) {
-    return {
-      status: 'unknown',
-      reason_codes: [
-        'REACHER_SMTP_ERROR',
-        `REACHER_ERR_${smtp.type.slice(0, 40)}`,
-        ...extras,
-      ],
-    };
+
+  const coreErr = extractSmtpCoreError(smtp);
+  if (coreErr) {
+    return mapCoreErrorToDiag(coreErr, extras);
   }
 
   const details = smtp as z.infer<typeof SmtpDetailsSchema>;
@@ -132,9 +215,9 @@ export function mapReacherSmtpToDiag(
 }
 
 export function mapReacherCatchAll(
-  smtp: z.infer<typeof SmtpDetailsSchema> | z.infer<typeof CoreErrorSchema> | undefined,
+  smtp: ReacherSmtpField | undefined,
 ): { status: CatchAllStatus; reason_codes: string[] } {
-  if (!smtp || ('type' in smtp && !('is_catch_all' in smtp))) {
+  if (!smtp || extractSmtpCoreError(smtp) || !('is_catch_all' in smtp)) {
     return { status: 'unknown', reason_codes: ['REACHER_CATCH_ALL_UNKNOWN'] };
   }
   const details = smtp as z.infer<typeof SmtpDetailsSchema>;
@@ -150,9 +233,9 @@ function hintReasonCode(hint: string | undefined): string[] {
 }
 
 function miscReasonCodes(
-  misc: z.infer<typeof MiscDetailsSchema> | z.infer<typeof CoreErrorSchema> | undefined,
+  misc: z.infer<typeof MiscDetailsSchema> | z.infer<typeof CoreErrorSchema> | z.infer<typeof SmtpNestedErrorSchema> | undefined,
 ): string[] {
-  if (!misc || 'type' in misc) return [];
+  if (!misc || isCoreError(misc) || isNestedSmtpError(misc)) return [];
   const codes: string[] = [];
   if (misc.is_disposable) codes.push('REACHER_MISC_DISPOSABLE');
   if (misc.is_role_account) codes.push('REACHER_MISC_ROLE');
@@ -172,6 +255,53 @@ function transportFailureResult(
 }
 
 /**
+ * Clamp configured timeout into a safe request budget.
+ * Default 15s; hard ceiling REACHER_TIMEOUT_MAX_MS so cold-start waits stay bounded.
+ */
+export function safeReacherTimeoutMs(configuredMs: number): number {
+  if (!Number.isFinite(configuredMs) || configuredMs <= 0) return 15_000;
+  return Math.min(Math.max(1_000, Math.floor(configuredMs)), REACHER_TIMEOUT_MAX_MS);
+}
+
+/**
+ * Safe timeout strategy for sync Reacher calls:
+ * - AbortController cancels the in-flight fetch
+ * - Promise.race hard-deadline still resolves if a mock/native fetch ignores abort
+ * - Outcome is always temporary_error on timeout — never Invalid
+ *
+ * Reacher `/v1/check_email` is request/response (server may queue internally); MailSure
+ * does not poll a separate job API. Bound wait + fail-soft is the async-safe client strategy.
+ */
+export async function fetchWithSafeTimeout(
+  fetchImpl: ReacherFetch,
+  url: string,
+  init: Omit<RequestInit, 'signal'>,
+  timeoutMs: number,
+): Promise<Response> {
+  const budget = safeReacherTimeoutMs(timeoutMs);
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      const err = new Error(`Reacher request timed out after ${budget}ms`);
+      err.name = 'TimeoutError';
+      reject(err);
+    }, budget);
+  });
+
+  try {
+    return await Promise.race([
+      fetchImpl(url, { ...init, signal: controller.signal }),
+      timeoutPromise,
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+/**
  * POST /v1/check_email on the configured Reacher origin.
  * Failures/timeouts map to temporary_error/unknown — never false Invalid.
  */
@@ -188,18 +318,22 @@ export async function checkEmailWithReacher(
   }
 
   const url = `${config.reacherApiUrl}/v1/check_email`;
-  const timeoutMs = config.reacherTimeoutMs;
+  const timeoutMs = safeReacherTimeoutMs(config.reacherTimeoutMs);
 
   try {
-    const res = await fetchImpl(url, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        accept: 'application/json',
+    const res = await fetchWithSafeTimeout(
+      fetchImpl,
+      url,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json',
+        },
+        body: JSON.stringify({ to_email: email }),
       },
-      body: JSON.stringify({ to_email: email }),
-      signal: AbortSignal.timeout(timeoutMs),
-    });
+      timeoutMs,
+    );
 
     if (!res.ok) {
       log.debug({ status: res.status }, 'Reacher HTTP error');

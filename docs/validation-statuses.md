@@ -35,8 +35,9 @@ When `REACHER_ENABLED=true`, MailSure maps Reacher **`smtp.*` details** (not raw
 |----------------|------------------------|
 | `is_deliverable` + not disabled | `ok` |
 | `is_disabled` / connected but not deliverable (non-catch-all) | `invalid` |
-| `has_full_inbox` / cannot connect / HTTP timeout / 5xx | `temporary_error` |
-| SMTP CoreError / schema miss | `unknown` |
+| `has_full_inbox` / cannot connect / HTTP timeout / 5xx / safe-timeout abort | `temporary_error` |
+| Nested `smtp.error` (e.g. `AsyncSmtpError`) with transient message | `temporary_error` |
+| Nested/flat SMTP CoreError (non-transient) / schema miss | `unknown` |
 
 `is_reachable` may appear only as opaque reason codes (`REACHER_HINT_*`). It is **never** copied into `overall_status`.
 

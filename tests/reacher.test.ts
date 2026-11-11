@@ -9,8 +9,12 @@ import {
 import {
   checkEmailWithReacher,
   classifyReachability,
+  fetchWithSafeTimeout,
   mapReacherCatchAll,
   mapReacherSmtpToDiag,
+  ReacherResponseSchema,
+  REACHER_TIMEOUT_MAX_MS,
+  safeReacherTimeoutMs,
 } from '../src/validators/reacher.js';
 
 describe('normalizeReacherApiUrl / assertReacherConfig', () => {
@@ -121,10 +125,90 @@ describe('mapReacherSmtpToDiag / catch-all', () => {
     expect(r.status).toBe('temporary_error');
   });
 
-  it('maps CoreError → unknown', () => {
+  it('maps flat CoreError → unknown', () => {
     const r = mapReacherSmtpToDiag({ type: 'SmtpError', message: 'blocked' });
     expect(r.status).toBe('unknown');
     expect(r.reason_codes).toContain('REACHER_SMTP_ERROR');
+  });
+
+  it('maps nested smtp.error (AsyncSmtpError transient) → temporary_error, not Invalid', () => {
+    // Real payload shape from reacherhq/check-if-email-exists#1674
+    const nested = {
+      error: {
+        type: 'AsyncSmtpError',
+        message: 'transient: 4.5.3 Too many recipients',
+      },
+    };
+    const parsed = ReacherResponseSchema.safeParse({
+      input: 'gerard.butler@example.com',
+      is_reachable: 'unknown',
+      smtp: nested,
+      misc: { is_disposable: false, is_role_account: false },
+      mx: { accepts_mail: true, records: ['mail.example.com.'] },
+      syntax: { domain: 'example.com', is_valid_syntax: true, username: 'gerard.butler' },
+    });
+    expect(parsed.success).toBe(true);
+    const r = mapReacherSmtpToDiag(nested);
+    expect(r.status).toBe('temporary_error');
+    expect(r.status).not.toBe('invalid');
+    expect(r.reason_codes).toContain('REACHER_SMTP_ERROR');
+    expect(r.reason_codes).toContain('REACHER_SMTP_TRANSIENT');
+    expect(r.reason_codes).toContain('REACHER_ERR_AsyncSmtpError');
+  });
+
+  it('maps nested smtp.error with description (IpBlacklisted) → unknown, not Invalid', () => {
+    const nested = {
+      error: {
+        type: 'SmtpError',
+        message: 'permanent: zen.mimecast.org blacklisted',
+      },
+      description: 'IpBlacklisted',
+    };
+    expect(ReacherResponseSchema.safeParse({ smtp: nested }).success).toBe(true);
+    const r = mapReacherSmtpToDiag(nested);
+    expect(r.status).toBe('unknown');
+    expect(r.status).not.toBe('invalid');
+    expect(r.reason_codes).toContain('REACHER_DESC_IpBlacklisted');
+  });
+
+  it('end-to-end: nested smtp.error response is not SCHEMA_MISMATCH', async () => {
+    process.env.REACHER_ENABLED = 'true';
+    process.env.REACHER_API_URL = 'https://reacher.test';
+    resetConfigCache();
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            input: 'a@example.com',
+            is_reachable: 'unknown',
+            smtp: {
+              error: {
+                type: 'AsyncSmtpError',
+                message: 'transient: 4.5.3 Too many recipients',
+              },
+            },
+            misc: { is_disposable: false, is_role_account: false },
+            mx: { accepts_mail: true, records: ['mail.example.com.'] },
+            syntax: {
+              domain: 'example.com',
+              is_valid_syntax: true,
+              username: 'a',
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+    );
+    const result = await checkEmailWithReacher(
+      'a@example.com',
+      loadConfig(),
+      fetchMock as unknown as typeof fetch,
+    );
+    expect(result.transportFailed).toBe(false);
+    expect(result.smtp.reason_codes).not.toContain('REACHER_SCHEMA_MISMATCH');
+    expect(result.smtp.status).toBe('temporary_error');
+    process.env.REACHER_ENABLED = 'false';
+    process.env.REACHER_API_URL = '';
+    resetConfigCache();
   });
 
   it('maps catch-all flag', () => {
@@ -293,5 +377,62 @@ describe('checkEmailWithReacher (mocked fetch)', () => {
     expect(result.transportFailed).toBe(true);
     expect(result.smtp.status).toBe('temporary_error');
     expect(result.smtp.reason_codes).toContain('REACHER_HTTP_503');
+  });
+
+  it('safe timeout aborts hung fetch and returns temporary_error (not Invalid)', async () => {
+    process.env.REACHER_TIMEOUT = '50';
+    resetConfigCache();
+    const cfg = loadConfig();
+    expect(cfg.reacherTimeoutMs).toBe(1000); // clamped floor
+
+    // Simulate hung Reacher (cold start) that ignores abort for a while
+    const fetchMock = vi.fn(
+      (_url: string | URL | Request, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          const signal = init?.signal;
+          if (signal) {
+            signal.addEventListener('abort', () => {
+              const err = new Error('aborted');
+              err.name = 'AbortError';
+              reject(err);
+            });
+          }
+          // Never resolve otherwise — race deadline must win
+        }),
+    );
+
+    const started = Date.now();
+    const result = await checkEmailWithReacher(
+      'a@example.com',
+      { ...cfg, reacherTimeoutMs: 80 },
+      fetchMock as unknown as typeof fetch,
+    );
+    const elapsed = Date.now() - started;
+
+    expect(result.transportFailed).toBe(true);
+    expect(result.smtp.status).toBe('temporary_error');
+    expect(result.smtp.reason_codes).toContain('REACHER_TIMEOUT');
+    expect(result.smtp.status).not.toBe('invalid');
+    expect(elapsed).toBeLessThan(1500);
+  });
+});
+
+describe('safeReacherTimeoutMs / fetchWithSafeTimeout', () => {
+  it('clamps timeout into [1000, REACHER_TIMEOUT_MAX_MS]', () => {
+    expect(safeReacherTimeoutMs(15_000)).toBe(15_000);
+    expect(safeReacherTimeoutMs(50)).toBe(1_000);
+    expect(safeReacherTimeoutMs(999_999)).toBe(REACHER_TIMEOUT_MAX_MS);
+  });
+
+  it('Promise.race deadline rejects hung fetch that ignores AbortSignal', async () => {
+    const hung = vi.fn(async () => new Promise<Response>(() => {}));
+    await expect(
+      fetchWithSafeTimeout(
+        hung as unknown as typeof fetch,
+        'https://reacher.test/v1/check_email',
+        { method: 'POST', body: '{}' },
+        60,
+      ),
+    ).rejects.toMatchObject({ name: 'TimeoutError' });
   });
 });

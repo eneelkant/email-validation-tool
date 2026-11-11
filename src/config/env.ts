@@ -61,6 +61,7 @@ const EnvSchema = z.object({
   // Optional remote Reacher SMTP (separate deploy). Names are REACHER_* by design.
   REACHER_ENABLED: bool(false),
   REACHER_API_URL: z.string().optional().default(''),
+  // Default 15s; capped at 60s in loadConfig (safe request budget / cold-start headroom).
   REACHER_TIMEOUT: z.coerce.number().int().positive().default(15_000),
   OPENVERIFY_LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
@@ -354,7 +355,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     catchAllEnabled: parsed.OPENVERIFY_CATCH_ALL_ENABLED,
     reacherEnabled: parsed.REACHER_ENABLED,
     reacherApiUrl: normalizeReacherApiUrl(parsed.REACHER_API_URL ?? ''),
-    reacherTimeoutMs: parsed.REACHER_TIMEOUT,
+    // Clamp into [1000, 60000] — same safe budget as fetchWithSafeTimeout.
+    reacherTimeoutMs: Math.min(60_000, Math.max(1_000, parsed.REACHER_TIMEOUT)),
     logLevel: parsed.OPENVERIFY_LOG_LEVEL,
     logEmails: parsed.OPENVERIFY_LOG_EMAILS,
     jobRetentionDays: parsed.OPENVERIFY_JOB_RETENTION_DAYS,
