@@ -173,7 +173,7 @@ Public verify-from-Pages requires a live MailSure HTTP origin with website API +
 
 The UI table mirrors `ValidationResult` in `src/types/results.ts`:
 
-`email`, `normalized_email`, `syntax_valid`, `domain_exists`, `mx_exists`, `is_disposable`, `is_role_based`, `smtp_status`, `catch_all_status`, `overall_status`, `confidence`, `reason_codes`, `checked_at`
+`email`, `normalized_email`, `syntax_valid`, `domain_exists`, `mx_exists`, `is_disposable`, `is_free_provider`, `provider_type` (UI label: Disposable email address / Free email provider), `is_role_based`, `smtp_status`, `catch_all_status`, `overall_status`, `confidence`, `reason_codes`, `checked_at`
 
 ## Security & honesty
 

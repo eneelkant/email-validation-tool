@@ -9,7 +9,8 @@ MailSure is a **self-hosted signal engine**, not a deliverability guarantee serv
 | `syntax_valid` | Address parses (RFC-aware; IDN/punycode supported). |
 | `domain_exists` / `mx_exists` | DNS evidence the domain can receive mail (MX or A/AAAA fallback). |
 | `overall_status: valid_domain` | Syntax OK **and** domain looks mail-capable. **Does not prove the mailbox exists.** |
-| `disposable` / `is_role_based` | Local dataset / role-local heuristics. |
+| `is_disposable` / `is_free_provider` / `provider_type` | Local disposable vs curated free-provider datasets (mutually exclusive; free never marked disposable). |
+| `is_role_based` | Role-local heuristics. |
 | `smtp_status` / `catch_all_status` | Optional probes; default **`not_checked`**. |
 
 Full status table: [validation-statuses.md](./validation-statuses.md).
@@ -19,7 +20,8 @@ Full status table: [validation-statuses.md](./validation-statuses.md).
 - No proof of individual mailbox existence when SMTP is off (default).
 - Even with SMTP enabled: greylisting, tarpits, catch-alls, and anti-abuse policies make RCPT results inconclusive; status may be `unknown` / `temporary_error` / `risky`.
 - DNS timeouts and temporary resolver failures map to `temporary_error` — **never treat as invalid**.
-- Disposable list is a local snapshot; it can be stale until refreshed via `update_disposable_domains`.
+- Disposable list is a local snapshot; it can be stale until refreshed via `update_disposable_domains` / `npm run update:disposable` (optional GH Action). **Not** downloaded per validation request.
+- Free-provider list is curated first-party data (`data/free-email-providers.txt`); incomplete coverage means some consumer domains may be `custom` until added.
 - Catch-all detection is best-effort and disabled unless both catch-all **and** SMTP flags are enabled.
 
 ## SMTP policy

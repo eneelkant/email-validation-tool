@@ -28,6 +28,7 @@ const EnvSchema = z.object({
   // File path, or ":memory:" for process-lifetime SQLite (free-tier / no disk).
   OPENVERIFY_DB_PATH: z.string().default('./data/runtime/openverify.sqlite'),
   OPENVERIFY_DISPOSABLE_PATH: z.string().default('./data/disposable-domains.txt'),
+  OPENVERIFY_FREE_PROVIDERS_PATH: z.string().default('./data/free-email-providers.txt'),
   OPENVERIFY_UPLOAD_DIR: z.string().default('./data/uploads'),
   OPENVERIFY_OUTPUT_DIR: z.string().default('./data/runtime/output'),
   // When true: treat storage as ephemeral (free-tier / serverless). Enables upload cleanup
@@ -82,6 +83,7 @@ export type AppConfig = {
   dataDir: string;
   dbPath: string;
   disposablePath: string;
+  freeProvidersPath: string;
   uploadDir: string;
   outputDir: string;
   ephemeralStorage: boolean;
@@ -191,14 +193,22 @@ export function relocateEphemeralPath(
 }
 
 /**
- * Disposable dataset: prefer an existing packaged file even under /var/task (read-only OK).
- * Only relocate when the file is missing and the path is not writable (ephemeral + readonly root).
+ * Disposable / free-provider datasets: prefer an existing packaged file even under /var/task
+ * (read-only OK). Only relocate when the file is missing and the path is not writable
+ * (ephemeral + readonly root).
  */
 export function resolveDisposablePath(resolved: string, ephemeral: boolean): string {
   if (!ephemeral || isMemoryDbPath(resolved)) return resolved;
   if (!isReadonlyDeployPath(resolved)) return resolved;
   if (existsSync(resolved)) return resolved;
   return path.join(getEphemeralRuntimeRoot(), 'disposable-domains.txt');
+}
+
+export function resolveFreeProvidersPath(resolved: string, ephemeral: boolean): string {
+  if (!ephemeral || isMemoryDbPath(resolved)) return resolved;
+  if (!isReadonlyDeployPath(resolved)) return resolved;
+  if (existsSync(resolved)) return resolved;
+  return path.join(getEphemeralRuntimeRoot(), 'free-email-providers.txt');
 }
 
 function ensureDir(dir: string): void {
@@ -331,6 +341,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const rawDataDir = resolvePath(parsed.OPENVERIFY_DATA_DIR);
   const rawDbPath = resolvePath(parsed.OPENVERIFY_DB_PATH);
   const rawDisposable = resolvePath(parsed.OPENVERIFY_DISPOSABLE_PATH);
+  const rawFreeProviders = resolvePath(parsed.OPENVERIFY_FREE_PROVIDERS_PATH);
   const rawUpload = resolvePath(parsed.OPENVERIFY_UPLOAD_DIR);
   const rawOutput = resolvePath(parsed.OPENVERIFY_OUTPUT_DIR);
 
@@ -339,6 +350,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     ? rawDbPath
     : relocateEphemeralPath(rawDbPath, ephemeralStorage, 'runtime/openverify.sqlite');
   const disposablePath = resolveDisposablePath(rawDisposable, ephemeralStorage);
+  const freeProvidersPath = resolveFreeProvidersPath(rawFreeProviders, ephemeralStorage);
   const uploadDir = relocateEphemeralPath(rawUpload, ephemeralStorage, 'uploads');
   const outputDir = relocateEphemeralPath(rawOutput, ephemeralStorage, 'runtime/output');
 
@@ -355,6 +367,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     dataDir,
     dbPath,
     disposablePath,
+    freeProvidersPath,
     uploadDir,
     outputDir,
     ephemeralStorage,
@@ -406,10 +419,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   if (!isMemoryDbPath(config.dbPath)) {
     ensureDir(path.dirname(config.dbPath));
   }
-  // Disposable: only ensure parent when we may need to create the seed file.
+  // Disposable / free-provider datasets: only ensure parent when we may seed the file.
   // Packaged read-only files under /var/task are used as-is without mkdir.
   if (!existsSync(config.disposablePath) && !isReadonlyDeployPath(config.disposablePath)) {
     ensureDir(path.dirname(config.disposablePath));
+  }
+  if (
+    !existsSync(config.freeProvidersPath) &&
+    !isReadonlyDeployPath(config.freeProvidersPath)
+  ) {
+    ensureDir(path.dirname(config.freeProvidersPath));
   }
 
   cached = config;

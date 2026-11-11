@@ -50,6 +50,27 @@ describe('validateEmail orchestrator', () => {
     };
     const r = await validateEmail('a@mailinator.com', { dnsLookup: async () => dns });
     expect(r.overall_status).toBe('disposable');
+    expect(r.provider_type).toBe('disposable');
+    expect(r.is_disposable).toBe(true);
+    expect(r.is_free_provider).toBe(false);
+  });
+
+  it('returns free provider classification for gmail without disposable status', async () => {
+    const dns: DnsLookupResult = {
+      domain: 'gmail.com',
+      domain_exists: true,
+      mx_exists: true,
+      a_records: [],
+      aaaa_records: [],
+      mx_hosts: ['gmail-smtp-in.l.google.com'],
+      error_code: null,
+      temporary: false,
+    };
+    const r = await validateEmail('user@gmail.com', { dnsLookup: async () => dns });
+    expect(r.overall_status).toBe('valid_domain');
+    expect(r.provider_type).toBe('free');
+    expect(r.is_free_provider).toBe(true);
+    expect(r.is_disposable).toBe(false);
   });
 
   it('returns temporary_error on DNS timeout-like results', async () => {

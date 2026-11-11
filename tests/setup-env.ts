@@ -10,6 +10,7 @@ process.env.OPENVERIFY_DB_PATH = path.join(root, 'test.sqlite');
 process.env.OPENVERIFY_UPLOAD_DIR = path.join(root, 'uploads');
 process.env.OPENVERIFY_OUTPUT_DIR = path.join(root, 'output');
 process.env.OPENVERIFY_DISPOSABLE_PATH = path.join(root, 'disposable-domains.txt');
+process.env.OPENVERIFY_FREE_PROVIDERS_PATH = path.join(root, 'free-email-providers.txt');
 process.env.OPENVERIFY_LOG_LEVEL = 'error';
 process.env.OPENVERIFY_SMTP_ENABLED = 'false';
 process.env.REACHER_ENABLED = 'false';

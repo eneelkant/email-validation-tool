@@ -1,0 +1,114 @@
+# MailSure MCP free email provider dataset
+# Source: curated first-party list (not downloaded per request)
+# Updated: 2026-11-11T00:00:00.000Z
+# One domain per line. Lines starting with # are comments.
+# These domains are NEVER classified as disposable, even if they appear on a disposable list.
+# Consumer / webmail providers only — not corporate custom domains.
+
+# Google
+gmail.com
+googlemail.com
+
+# Microsoft
+outlook.com
+outlook.co.uk
+hotmail.com
+hotmail.co.uk
+hotmail.fr
+hotmail.de
+live.com
+live.co.uk
+msn.com
+
+# Yahoo
+yahoo.com
+yahoo.co.uk
+yahoo.co.jp
+yahoo.fr
+yahoo.de
+yahoo.com.br
+ymail.com
+rocketmail.com
+
+# China major webmail
+qq.com
+foxmail.com
+163.com
+126.com
+yeah.net
+
+# Apple
+icloud.com
+me.com
+mac.com
+
+# AOL / Verizon media
+aol.com
+
+# Proton
+protonmail.com
+proton.me
+pm.me
+
+# GMX / Mail.com
+gmx.com
+gmx.net
+gmx.de
+mail.com
+
+# Zoho consumer
+zoho.com
+zohomail.com
+
+# Yandex / Mail.ru
+yandex.com
+yandex.ru
+mail.ru
+inbox.ru
+bk.ru
+list.ru
+
+# Other common free / consumer webmail
+fastmail.com
+fastmail.fm
+tutanota.com
+tuta.com
+hey.com
+duck.com
+naver.com
+daum.net
+rediffmail.com
+inbox.com
+zoho.in
+mailfence.com
+hushmail.com
+runbox.com
+posteo.de
+mailbox.org
+startmail.com
+comcast.net
+verizon.net
+att.net
+sbcglobal.net
+btinternet.com
+virginmedia.com
+orange.fr
+free.fr
+laposte.net
+web.de
+t-online.de
+libero.it
+virgilio.it
+alice.it
+seznam.cz
+wp.pl
+o2.pl
+interia.pl
+uol.com.br
+bol.com.br
+terra.com.br
+sina.com
+sohu.com
+aliyun.com
+139.com
+188.com

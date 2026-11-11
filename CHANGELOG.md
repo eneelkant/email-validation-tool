@@ -6,6 +6,9 @@ All notable changes to MailSure MCP will be documented in this file.
 
 ### Added
 
+- Disposable vs free email provider classification: `is_free_provider`, `provider_type` (`disposable` \| `free` \| `custom`) on ValidationResult / domain check / CSV / website UI / MCP; UI labels “Disposable email address” / “Free email provider”
+- Curated `data/free-email-providers.txt` + `OPENVERIFY_FREE_PROVIDERS_PATH` (gmail/outlook/hotmail/yahoo/qq and more); free providers are never marked disposable
+- Fail-safe disposable refresh (`npm run update:disposable` replace mode + optional `.github/workflows/refresh-disposable-domains.yml`); no per-request download
 - Optional remote Reacher SMTP provider (`REACHER_ENABLED` / `REACHER_API_URL` / `REACHER_TIMEOUT`): orchestrator calls separate `POST /v1/check_email` after DNS; maps `smtp.*` into MailSure statuses; never uses raw `is_reachable` as verdict; local SMTP remains fallback; failures/timeouts stay temporary/unknown (not false Invalid)
 - Reacher response parsing accepts nested `smtp.error` (and flat CoreError); sync calls use AbortController + Promise.race safe timeout (default 15s, max 60s)
 - Render Blueprint `render.yaml` for Web Service **mailsure-api** (Docker, health `/health`, website API + Pages CORS, free-tier **no persistent disk** / ephemeral `/data`, secrets via Render)

@@ -3,11 +3,11 @@ import { getConfig } from '../config/env.js';
 import type { Confidence, OverallStatus, ValidationResult } from '../types/results.js';
 import { detectCatchAll, type CatchAllResult } from './catch-all.js';
 import { lookupDomainDns } from './dns.js';
-import { isDisposableDomain } from './disposable.js';
 import {
   checkEmailWithReacher,
   type ReacherCheckResult,
 } from './reacher.js';
+import { classifyProvider } from './provider.js';
 import { isRoleBasedLocalPart } from './role.js';
 import { diagnoseSmtp, type SmtpDiagResult } from './smtp.js';
 import { validateSyntax } from './syntax.js';
@@ -42,6 +42,8 @@ export async function validateEmail(
       domain_exists: null,
       mx_exists: null,
       is_disposable: null,
+      is_free_provider: null,
+      provider_type: null,
       is_role_based: null,
       smtp_status: 'not_checked',
       catch_all_status: 'not_checked',
@@ -54,12 +56,13 @@ export async function validateEmail(
 
   const dnsFn = options.dnsLookup ?? lookupDomainDns;
   const dns = await dnsFn(syntax.domain);
-  const disposable = isDisposableDomain(syntax.domain);
+  const provider = classifyProvider(syntax.domain);
   const role = isRoleBasedLocalPart(syntax.local);
 
   const reason_codes = [...syntax.reason_codes];
   if (dns.error_code) reason_codes.push(dns.error_code);
-  if (disposable) reason_codes.push('DISPOSABLE_DOMAIN');
+  if (provider.is_disposable) reason_codes.push('DISPOSABLE_DOMAIN');
+  if (provider.is_free_provider) reason_codes.push('FREE_EMAIL_PROVIDER');
   if (role) reason_codes.push('ROLE_BASED');
 
   const { smtp_status, catch_all_status } = await resolveSmtpAndCatchAll({
@@ -80,7 +83,7 @@ export async function validateEmail(
     dnsTemporary: dns.temporary,
     domainExists: dns.domain_exists,
     mxExists: dns.mx_exists,
-    disposable,
+    disposable: provider.is_disposable,
     role,
     smtpStatus: smtp_status.status,
     catchAll: catch_all_status.status,
@@ -92,7 +95,9 @@ export async function validateEmail(
     syntax_valid: true,
     domain_exists: dns.domain_exists,
     mx_exists: dns.mx_exists,
-    is_disposable: disposable,
+    is_disposable: provider.is_disposable,
+    is_free_provider: provider.is_free_provider,
+    provider_type: provider.provider_type,
     is_role_based: role,
     smtp_status: smtp_status.status,
     catch_all_status: catch_all_status.status,
@@ -225,6 +230,7 @@ export async function checkDomain(domainRaw: string) {
   const syntax = validateSyntax(`probe@${domainRaw.trim()}`);
   const domain = syntax.syntax_valid ? syntax.domain : domainRaw.trim().toLowerCase();
   const dns = await lookupDomainDns(domain);
+  const provider = classifyProvider(domain);
   return {
     domain: domainRaw,
     normalized_domain: domain,
@@ -233,7 +239,9 @@ export async function checkDomain(domainRaw: string) {
     a_records: dns.a_records,
     aaaa_records: dns.aaaa_records,
     mx_hosts: dns.mx_hosts,
-    is_disposable: isDisposableDomain(domain),
+    is_disposable: provider.is_disposable,
+    is_free_provider: provider.is_free_provider,
+    provider_type: provider.provider_type,
     dns_error: dns.error_code,
     checked_at: new Date().toISOString(),
   };

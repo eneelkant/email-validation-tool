@@ -34,6 +34,10 @@ export const CatchAllStatusSchema = z.enum([
 ]);
 export type CatchAllStatus = z.infer<typeof CatchAllStatusSchema>;
 
+/** Mutually exclusive provider class after normalize (null when syntax invalid). */
+export const ProviderTypeSchema = z.enum(['disposable', 'free', 'custom']);
+export type ProviderType = z.infer<typeof ProviderTypeSchema>;
+
 export const ValidationResultSchema = z.object({
   email: z.string(),
   normalized_email: z.string(),
@@ -41,6 +45,8 @@ export const ValidationResultSchema = z.object({
   domain_exists: z.boolean().nullable(),
   mx_exists: z.boolean().nullable(),
   is_disposable: z.boolean().nullable(),
+  is_free_provider: z.boolean().nullable(),
+  provider_type: ProviderTypeSchema.nullable(),
   is_role_based: z.boolean().nullable(),
   smtp_status: SmtpStatusSchema,
   catch_all_status: CatchAllStatusSchema,
@@ -62,6 +68,8 @@ export const DomainCheckResultSchema = z.object({
   aaaa_records: z.array(z.string()),
   mx_hosts: z.array(z.string()),
   is_disposable: z.boolean(),
+  is_free_provider: z.boolean(),
+  provider_type: ProviderTypeSchema,
   dns_error: z.string().nullable(),
   checked_at: z.string(),
 });

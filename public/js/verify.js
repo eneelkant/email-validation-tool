@@ -178,6 +178,23 @@
     return String(v);
   }
 
+  /** Human labels for provider_type (matches server classifyProvider). */
+  function providerTypeLabel(providerType) {
+    if (providerType === "disposable") return "Disposable email address";
+    if (providerType === "free") return "Free email provider";
+    return null;
+  }
+
+  function renderProviderLabel(r) {
+    const label = providerTypeLabel(r.provider_type);
+    if (!label) return "—";
+    const cls =
+      r.provider_type === "disposable"
+        ? "provider-label provider-disposable"
+        : "provider-label provider-free";
+    return '<span class="' + cls + '">' + escapeHtml(label) + "</span>";
+  }
+
   function renderResults(container, results) {
     if (!container) return;
     if (!results || !results.length) {
@@ -210,6 +227,12 @@
           "</td>" +
           "<td>" +
           escapeHtml(formatNullable(r.is_disposable)) +
+          "</td>" +
+          "<td>" +
+          escapeHtml(formatNullable(r.is_free_provider)) +
+          "</td>" +
+          "<td>" +
+          renderProviderLabel(r) +
           "</td>" +
           "<td>" +
           escapeHtml(formatNullable(r.is_role_based)) +
@@ -250,6 +273,8 @@
       "<th scope=\"col\">domain_exists</th>" +
       "<th scope=\"col\">mx_exists</th>" +
       "<th scope=\"col\">is_disposable</th>" +
+      "<th scope=\"col\">is_free_provider</th>" +
+      "<th scope=\"col\">provider</th>" +
       "<th scope=\"col\">is_role_based</th>" +
       "<th scope=\"col\">smtp_status</th>" +
       "<th scope=\"col\">catch_all_status</th>" +
@@ -262,7 +287,8 @@
       rows +
       "</tbody></table></div>" +
       '<p class="hint" style="margin-top:0.75rem">Statuses describe domain-level signals. ' +
-      "<strong>valid_domain</strong> does not prove the mailbox exists.</p>";
+      "<strong>valid_domain</strong> does not prove the mailbox exists. " +
+      "Provider labels: <em>Disposable email address</em> / <em>Free email provider</em>.</p>";
   }
 
   function unavailableMessage(reason) {
@@ -303,5 +329,6 @@
     unavailableMessage,
     assertValidationResult,
     isConnectionReason,
+    providerTypeLabel,
   };
 })(window);

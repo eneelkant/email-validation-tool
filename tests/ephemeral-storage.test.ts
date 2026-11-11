@@ -27,6 +27,7 @@ function withTempRuntime(): string {
   process.env.OPENVERIFY_UPLOAD_DIR = path.join(root, 'uploads');
   process.env.OPENVERIFY_OUTPUT_DIR = path.join(root, 'output');
   process.env.OPENVERIFY_DISPOSABLE_PATH = path.join(root, 'disposable-domains.txt');
+  process.env.OPENVERIFY_FREE_PROVIDERS_PATH = path.join(root, 'free-email-providers.txt');
   process.env.OPENVERIFY_HTTP_HOST = '127.0.0.1';
   process.env.OPENVERIFY_ALLOWED_HOSTS = '127.0.0.1,localhost';
   return root;
@@ -247,6 +248,7 @@ describe('ephemeral never mkdir under /var/task (Enzonic / Lambda)', () => {
     upload: process.env.OPENVERIFY_UPLOAD_DIR,
     output: process.env.OPENVERIFY_OUTPUT_DIR,
     disposable: process.env.OPENVERIFY_DISPOSABLE_PATH,
+    freeProviders: process.env.OPENVERIFY_FREE_PROVIDERS_PATH,
     ephemeral: process.env.OPENVERIFY_EPHEMERAL_STORAGE,
     host: process.env.OPENVERIFY_HTTP_HOST,
     port: process.env.PORT,
@@ -264,6 +266,7 @@ describe('ephemeral never mkdir under /var/task (Enzonic / Lambda)', () => {
     process.env.OPENVERIFY_UPLOAD_DIR = '/var/task/data/uploads';
     process.env.OPENVERIFY_OUTPUT_DIR = '/var/task/data/runtime/output';
     process.env.OPENVERIFY_DISPOSABLE_PATH = '/var/task/data/disposable-domains.txt';
+    process.env.OPENVERIFY_FREE_PROVIDERS_PATH = '/var/task/data/free-email-providers.txt';
     process.env.OPENVERIFY_EPHEMERAL_STORAGE = 'true';
     process.env.OPENVERIFY_HTTP_HOST = '127.0.0.1';
     process.env.OPENVERIFY_ALLOWED_HOSTS = '127.0.0.1,localhost';
@@ -283,6 +286,7 @@ describe('ephemeral never mkdir under /var/task (Enzonic / Lambda)', () => {
     process.env.OPENVERIFY_UPLOAD_DIR = prev.upload;
     process.env.OPENVERIFY_OUTPUT_DIR = prev.output;
     process.env.OPENVERIFY_DISPOSABLE_PATH = prev.disposable;
+    process.env.OPENVERIFY_FREE_PROVIDERS_PATH = prev.freeProviders;
     process.env.OPENVERIFY_EPHEMERAL_STORAGE = prev.ephemeral ?? 'false';
     process.env.OPENVERIFY_HTTP_HOST = prev.host;
     if (prev.port === undefined) delete process.env.PORT;
@@ -319,6 +323,7 @@ describe('ephemeral never mkdir under /var/task (Enzonic / Lambda)', () => {
     expect(cfg.outputDir.startsWith(os.tmpdir())).toBe(true);
     expect(cfg.dbPath.startsWith(os.tmpdir())).toBe(true);
     expect(cfg.disposablePath.startsWith(os.tmpdir())).toBe(true);
+    expect(cfg.freeProvidersPath.startsWith(os.tmpdir())).toBe(true);
     expect(isReadonlyDeployPath(cfg.dataDir)).toBe(false);
     expect(isReadonlyDeployPath(cfg.dbPath)).toBe(false);
     // Regression: the exact Enzonic failure path must not exist / not be used
@@ -389,6 +394,7 @@ describe('non-ephemeral refuses mkdir under /var/task', () => {
     upload: process.env.OPENVERIFY_UPLOAD_DIR,
     output: process.env.OPENVERIFY_OUTPUT_DIR,
     disposable: process.env.OPENVERIFY_DISPOSABLE_PATH,
+    freeProviders: process.env.OPENVERIFY_FREE_PROVIDERS_PATH,
   };
 
   beforeEach(() => {
@@ -399,6 +405,10 @@ describe('non-ephemeral refuses mkdir under /var/task', () => {
     process.env.OPENVERIFY_UPLOAD_DIR = '/var/task/data/uploads';
     process.env.OPENVERIFY_OUTPUT_DIR = '/var/task/data/runtime/output';
     process.env.OPENVERIFY_DISPOSABLE_PATH = path.join(os.tmpdir(), 'disposable-domains.txt');
+    process.env.OPENVERIFY_FREE_PROVIDERS_PATH = path.join(
+      os.tmpdir(),
+      'free-email-providers.txt',
+    );
     process.env.OPENVERIFY_EPHEMERAL_STORAGE = 'false';
   });
 
@@ -409,6 +419,7 @@ describe('non-ephemeral refuses mkdir under /var/task', () => {
     process.env.OPENVERIFY_UPLOAD_DIR = prev.upload;
     process.env.OPENVERIFY_OUTPUT_DIR = prev.output;
     process.env.OPENVERIFY_DISPOSABLE_PATH = prev.disposable;
+    process.env.OPENVERIFY_FREE_PROVIDERS_PATH = prev.freeProviders;
     process.env.OPENVERIFY_EPHEMERAL_STORAGE = 'false';
   });
 

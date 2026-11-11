@@ -188,6 +188,8 @@
       "domain_exists",
       "mx_exists",
       "is_disposable",
+      "is_free_provider",
+      "provider_type",
       "is_role_based",
       "smtp_status",
       "catch_all_status",

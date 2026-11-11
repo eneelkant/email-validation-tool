@@ -6,6 +6,7 @@
 import { getDb } from '../database/db.js';
 import { getLogger } from '../utils/logger.js';
 import { loadDisposableDomains } from '../validators/disposable.js';
+import { loadFreeProviders } from '../validators/free-provider.js';
 
 const log = getLogger('lifecycle');
 
@@ -51,7 +52,7 @@ export function beginRuntimeInitialization(): void {
 }
 
 /**
- * Initialize SQLite + disposable dataset once.
+ * Initialize SQLite + disposable / free-provider datasets once.
  * Safe to call concurrently — shares a single in-flight promise.
  */
 export async function initializeRuntime(): Promise<void> {
@@ -65,6 +66,8 @@ export async function initializeRuntime(): Promise<void> {
   initPromise = (async () => {
     try {
       getDb();
+      // Free providers first so disposable classification can exclude them.
+      loadFreeProviders();
       loadDisposableDomains();
       dbStatus = 'ready';
       initCompleted = true;

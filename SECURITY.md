@@ -2,7 +2,7 @@
 
 ## Threat model (summary)
 
-MailSure MCP validates email addresses using local syntax checks, DNS/MX lookups, a local disposable-domain dataset, optional SMTP diagnostics, and CSV processing. It is designed to run **self-hosted** without paid verification APIs.
+MailSure MCP validates email addresses using local syntax checks, DNS/MX lookups, local disposable-domain and free-provider datasets (no per-request download), optional SMTP diagnostics, and CSV processing. It is designed to run **self-hosted** without paid verification APIs. Free/webmail providers are never classified as disposable.
 
 ### In scope risks
 

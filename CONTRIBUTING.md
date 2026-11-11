@@ -24,7 +24,7 @@ npm run build
 | `npm run build` | Compile `src/` → `dist/` |
 | `npm run start:stdio` | Run MCP over STDIO |
 | `npm run start:http` | Run Streamable HTTP MCP |
-| `npm run update:disposable` | Opt-in disposable list refresh |
+| `npm run update:disposable` | Opt-in fail-safe disposable list refresh (replace; strips free providers) |
 
 ## Guidelines
 

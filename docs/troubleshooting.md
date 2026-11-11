@@ -34,7 +34,8 @@ HTTP mode binds the listener **before** SQLite initialization so cold-start prob
 |-------------|-------------|
 | `valid_domain` but mail bounces later | Domain/MX OK ≠ mailbox proof (SMTP off by default) |
 | `temporary_error` | DNS/SMTP transient failure — retry; do not mark invalid |
-| `disposable` false for a known throwaway | Local list stale — run `update_disposable_domains` / `npm run update:disposable` |
+| `disposable` false for a known throwaway | Local list stale — run `update_disposable_domains` / `npm run update:disposable` (fail-safe; keeps prior file on failure) |
+| Free webmail marked disposable | Should not happen — free list wins; check `data/free-email-providers.txt` and refresh disposable so overlaps are stripped |
 | SMTP always `not_checked` | Expected unless `OPENVERIFY_SMTP_ENABLED=true` |
 
 ## CSV jobs

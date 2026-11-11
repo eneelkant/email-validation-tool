@@ -14,7 +14,8 @@
 |------------|--------|
 | Syntax validation | RFC-aware, IDN/punycode, preserves original address |
 | DNS / MX / A / AAAA | Timeouts ≠ invalid |
-| Disposable detection | Local dataset (not fetched per request) |
+| Disposable detection | Local dataset (not fetched per request); optional fail-safe refresh |
+| Free provider detection | Curated list (gmail/outlook/yahoo/qq/…); never marked disposable |
 | Role-based locals | Configurable list (`admin@`, `info@`, …) |
 | Optional SMTP / catch-all | **Off by default**; never sends mail; no deliverability guarantee |
 | Caching + jobs | SQLite |
