@@ -7,11 +7,17 @@ import {
   loadDisposableDomains,
   updateDisposableDomainsFromText,
 } from '../src/validators/disposable.js';
+import {
+  ensureFreeProvidersDatasetFile,
+  loadFreeProviders,
+} from '../src/validators/free-provider.js';
 
 describe('disposable domains', () => {
   beforeAll(() => {
     resetConfigCache();
     loadConfig();
+    ensureFreeProvidersDatasetFile();
+    loadFreeProviders(true);
     ensureDisposableDatasetFile();
     loadDisposableDomains(true);
   });
@@ -21,7 +27,7 @@ describe('disposable domains', () => {
     expect(isDisposableDomain('sub.mailinator.com')).toBe(true);
   });
 
-  it('does not flag normal domains', () => {
+  it('does not flag normal or free domains', () => {
     expect(isDisposableDomain('gmail.com')).toBe(false);
     expect(isDisposableDomain('example.com')).toBe(false);
   });

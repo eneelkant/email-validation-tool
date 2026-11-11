@@ -17,6 +17,7 @@ import {
   updateDisposableDomainsFromText,
   updateDisposableDomainsFromUrl,
 } from '../validators/disposable.js';
+import { getFreeProvidersMeta, loadFreeProviders } from '../validators/free-provider.js';
 import { checkDomain, validateEmail } from '../validators/orchestrator.js';
 import { getCachedValidation, setCachedValidation } from '../database/db.js';
 import { validateSyntax } from '../validators/syntax.js';
@@ -51,7 +52,7 @@ export function registerTools(server: McpServer): void {
     {
       title: 'Verify email',
       description:
-        'Validate a single email address (syntax, DNS/MX, disposable, role-based). Does not prove mailbox existence. SMTP is off unless enabled in config.',
+        'Validate a single email address (syntax, DNS/MX, disposable vs free-provider classification, role-based). Does not prove mailbox existence. SMTP is off unless enabled in config.',
       inputSchema: z.object({
         email: z.string().describe('Email address to validate'),
         skip_cache: z.boolean().optional().describe('Bypass validation cache'),
@@ -157,7 +158,8 @@ export function registerTools(server: McpServer): void {
     'check_domain',
     {
       title: 'Check domain',
-      description: 'DNS/MX/A/AAAA lookup and disposable check for a domain (no mailbox probe).',
+      description:
+        'DNS/MX/A/AAAA lookup plus disposable/free-provider classification for a domain (no mailbox probe).',
       inputSchema: z.object({
         domain: z.string(),
         skip_cache: z.boolean().optional(),
@@ -255,6 +257,7 @@ export function registerTools(server: McpServer): void {
         return textResult({
           ...getStatistics(),
           disposable: getDisposableMeta(),
+          free_providers: getFreeProvidersMeta(),
         });
       } catch (err) {
         return errorResult(err);
@@ -314,6 +317,8 @@ export function registerTools(server: McpServer): void {
     },
     async ({ domains_text, url, reload_only }) => {
       try {
+        // Ensure free list is loaded so disposable writes can exclude overlaps.
+        loadFreeProviders();
         if (reload_only) {
           loadDisposableDomains(true);
           return textResult(getDisposableMeta());
@@ -323,7 +328,8 @@ export function registerTools(server: McpServer): void {
           meta = updateDisposableDomainsFromText(domains_text, 'mcp-tool');
         }
         if (url) {
-          meta = await updateDisposableDomainsFromUrl(url);
+          // MCP merges by default (additive). Full replace is via npm run update:disposable.
+          meta = await updateDisposableDomainsFromUrl(url, { mode: 'merge' });
         }
         if (!domains_text && !url) {
           loadDisposableDomains(true);

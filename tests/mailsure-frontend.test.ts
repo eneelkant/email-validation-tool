@@ -54,6 +54,8 @@ describe('MailSure frontend CSV helpers', () => {
         domain_exists: true,
         mx_exists: true,
         is_disposable: false,
+        is_free_provider: false,
+        provider_type: 'custom',
         is_role_based: false,
         smtp_status: 'not_checked',
         catch_all_status: 'not_checked',
@@ -64,6 +66,8 @@ describe('MailSure frontend CSV helpers', () => {
       },
     ]);
     expect(out.split('\n')[0]).toContain('email');
+    expect(out.split('\n')[0]).toContain('is_free_provider');
+    expect(out.split('\n')[0]).toContain('provider_type');
     expect(out).toContain('a@example.com');
     expect(out).toContain('ok|mx');
   });
@@ -244,6 +248,8 @@ describe('MailSure API client', () => {
               domain_exists: null,
               mx_exists: null,
               is_disposable: null,
+              is_free_provider: null,
+              provider_type: null,
               is_role_based: null,
               smtp_status: 'not_checked',
               catch_all_status: 'not_checked',
@@ -285,6 +291,8 @@ describe('MailSure API client', () => {
                 domain_exists: null,
                 mx_exists: null,
                 is_disposable: null,
+                is_free_provider: null,
+                provider_type: null,
                 is_role_based: null,
                 smtp_status: 'not_checked',
                 catch_all_status: 'not_checked',
@@ -300,6 +308,8 @@ describe('MailSure API client', () => {
                 domain_exists: null,
                 mx_exists: null,
                 is_disposable: null,
+                is_free_provider: null,
+                provider_type: null,
                 is_role_based: null,
                 smtp_status: 'not_checked',
                 catch_all_status: 'not_checked',

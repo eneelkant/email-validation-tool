@@ -8,10 +8,23 @@
 | `invalid_syntax` | Address failed syntax checks |
 | `invalid_domain` | Domain does not exist (e.g. NXDOMAIN) |
 | `no_mx` | Domain exists but no MX and no usable A/AAAA fallback |
-| `disposable` | Domain matches local disposable dataset |
+| `disposable` | Domain matches local disposable dataset (and is **not** a free provider) |
 | `risky` | Role-based, catch-all, or SMTP signals suggest elevated risk |
 | `unknown` | Insufficient information (e.g. SMTP blocked) |
 | `temporary_error` | Transient DNS/SMTP failure — **never treat as invalid** |
+
+## Provider classification
+
+After normalize, MailSure assigns a mutually exclusive `provider_type`:
+
+| `provider_type` | Flags | UI label |
+|-----------------|-------|----------|
+| `disposable` | `is_disposable=true` | Disposable email address |
+| `free` | `is_free_provider=true` | Free email provider |
+| `custom` | both false | — (none) |
+| `null` | both null | — (invalid syntax) |
+
+Precedence: free providers win on overlap — **never** mark free/webmail domains (gmail, outlook, hotmail, yahoo, qq, …) as disposable. Free providers still follow normal DNS/SMTP overall status (typically `valid_domain`), they are not forced to `overall_status: disposable`.
 
 ## `confidence`
 

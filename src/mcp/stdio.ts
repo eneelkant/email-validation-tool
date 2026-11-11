@@ -3,6 +3,7 @@ import { createOpenVerifyServer } from './server.js';
 import { getLogger } from '../utils/logger.js';
 import { closeDb, getDb } from '../database/db.js';
 import { loadDisposableDomains } from '../validators/disposable.js';
+import { loadFreeProviders } from '../validators/free-provider.js';
 
 const log = getLogger('stdio');
 
@@ -10,8 +11,9 @@ const log = getLogger('stdio');
  * Start MailSure MCP over STDIO. Logs go to stderr only.
  */
 export async function startStdioServer(): Promise<void> {
-  // Touch DB + disposable dataset before protocol traffic
+  // Touch DB + provider datasets before protocol traffic
   getDb();
+  loadFreeProviders();
   loadDisposableDomains();
 
   log.info('Starting MailSure MCP over STDIO');

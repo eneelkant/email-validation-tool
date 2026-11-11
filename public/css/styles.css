@@ -697,6 +697,21 @@ table.results-table {
   color: var(--ms-warn);
 }
 
+.provider-label {
+  display: inline-block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.provider-disposable {
+  color: var(--ms-warn);
+}
+
+.provider-free {
+  color: var(--ms-info);
+}
+
 .status-unknown,
 .status-temporary_error {
   background: #e0e7ff;

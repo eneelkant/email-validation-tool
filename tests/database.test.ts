@@ -33,6 +33,8 @@ describe('database', () => {
       domain_exists: true,
       mx_exists: true,
       is_disposable: false,
+      is_free_provider: false,
+      provider_type: 'custom',
       is_role_based: false,
       smtp_status: 'not_checked',
       catch_all_status: 'not_checked',

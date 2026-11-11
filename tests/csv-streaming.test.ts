@@ -19,6 +19,8 @@ function fakeResult(email: string, i: number): ValidationResult {
     domain_exists: email.includes('@') ? true : null,
     mx_exists: email.includes('@') ? true : null,
     is_disposable: false,
+    is_free_provider: false,
+    provider_type: 'custom',
     is_role_based: false,
     smtp_status: 'not_checked',
     catch_all_status: 'not_checked',

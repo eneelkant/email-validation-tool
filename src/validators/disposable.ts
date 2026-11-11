@@ -1,8 +1,17 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import {
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  renameSync,
+  unlinkSync,
+} from 'node:fs';
 import path from 'node:path';
 import { getConfig, isReadonlyDeployPath } from '../config/env.js';
 import { getLogger } from '../utils/logger.js';
+import { domainOrParentInSet, parseDomainListText } from './domain-set.js';
+import { isFreeProviderDomain, loadFreeProviders } from './free-provider.js';
 
 const log = getLogger('disposable');
 
@@ -39,6 +48,9 @@ const DEFAULT_SEED = [
   'dispostable.com',
 ];
 
+/** Minimum domain count for a full replace refresh (fail-safe against truncated downloads). */
+export const DISPOSABLE_REPLACE_MIN_COUNT = 500;
+
 export function ensureDisposableDatasetFile(): string {
   const cfg = getConfig();
   const file = cfg.disposablePath;
@@ -59,6 +71,7 @@ export function ensureDisposableDatasetFile(): string {
     '# Source: curated local seed (not downloaded per request)',
     `# Updated: ${new Date().toISOString()}`,
     '# One domain per line. Lines starting with # are comments.',
+    '# Free email providers are never classified as disposable.',
     '',
     ...DEFAULT_SEED,
     '',
@@ -72,12 +85,7 @@ export function loadDisposableDomains(force = false): Set<string> {
   if (domainSet && !force) return domainSet;
   const file = ensureDisposableDatasetFile();
   const text = readFileSync(file, 'utf8');
-  const domains = new Set<string>();
-  for (const line of text.split(/\r?\n/)) {
-    const t = line.trim().toLowerCase();
-    if (!t || t.startsWith('#')) continue;
-    domains.add(t.replace(/\.$/, ''));
-  }
+  const domains = parseDomainListText(text);
   const hash = createHash('sha256').update(text).digest('hex').slice(0, 12);
   const updatedMatch = text.match(/Updated:\s*(\S+)/i);
   meta = {
@@ -96,17 +104,48 @@ export function getDisposableMeta(): DisposableDatasetMeta {
   return meta!;
 }
 
+/** Raw list membership (parent-domain aware). Does not apply free-provider exclusion. */
+export function isDisposableDomainListed(domain: string): boolean {
+  return domainOrParentInSet(domain, loadDisposableDomains());
+}
+
+/**
+ * Disposable hit for validation: true only when listed AND not a free provider.
+ * Prefer classifyProvider() for full provider_type classification.
+ */
 export function isDisposableDomain(domain: string): boolean {
-  const set = loadDisposableDomains();
-  const d = domain.toLowerCase().replace(/\.$/, '');
-  if (set.has(d)) return true;
-  // Check parent domains (e.g. mail.mailinator.com)
-  const parts = d.split('.');
-  for (let i = 1; i < parts.length - 1; i++) {
-    const parent = parts.slice(i).join('.');
-    if (set.has(parent)) return true;
+  if (isFreeProviderDomain(domain)) return false;
+  return isDisposableDomainListed(domain);
+}
+
+function writeDisposableFile(
+  domains: Iterable<string>,
+  sourceLabel: string,
+): DisposableDatasetMeta {
+  const file = ensureDisposableDatasetFile();
+  // Exclude free providers from the persisted disposable file when possible.
+  let free: Set<string>;
+  try {
+    free = loadFreeProviders();
+  } catch {
+    free = new Set();
   }
-  return false;
+  const filtered = [...domains].filter((d) => !free.has(d)).sort();
+  const now = new Date().toISOString();
+  const body = [
+    '# MailSure MCP disposable domain dataset',
+    `# Source: ${sourceLabel}`,
+    `# Updated: ${now}`,
+    '# One domain per line. Lines starting with # are comments.',
+    '# Free email providers are stripped on write and never classified as disposable.',
+    '',
+    ...filtered,
+    '',
+  ].join('\n');
+  writeFileSync(file, body, 'utf8');
+  domainSet = null;
+  meta = null;
+  return getDisposableMeta();
 }
 
 /**
@@ -117,25 +156,72 @@ export function updateDisposableDomainsFromText(
   content: string,
   sourceLabel = 'manual-update',
 ): DisposableDatasetMeta {
-  const file = ensureDisposableDatasetFile();
   const existing = loadDisposableDomains(true);
-  for (const line of content.split(/\r?\n/)) {
-    const t = line.trim().toLowerCase().replace(/\.$/, '');
-    if (!t || t.startsWith('#') || !t.includes('.')) continue;
-    existing.add(t);
+  for (const d of parseDomainListText(content)) {
+    existing.add(d);
   }
-  const sorted = [...existing].sort();
+  return writeDisposableFile(existing, sourceLabel);
+}
+
+/**
+ * Fail-safe full replace of the disposable dataset.
+ * Writes atomically (temp → rename). On validation failure the previous file is kept.
+ */
+export function replaceDisposableDomainsFromText(
+  content: string,
+  sourceLabel = 'replace-update',
+  options: { minCount?: number } = {},
+): DisposableDatasetMeta {
+  const minCount = options.minCount ?? DISPOSABLE_REPLACE_MIN_COUNT;
+  const parsed = parseDomainListText(content);
+  if (parsed.size < minCount) {
+    throw new Error(
+      `Disposable replace rejected: got ${parsed.size} domains, need at least ${minCount}. ` +
+        'Previous dataset left unchanged.',
+    );
+  }
+
+  let free: Set<string>;
+  try {
+    free = loadFreeProviders();
+  } catch {
+    free = new Set();
+  }
+  const filtered = [...parsed].filter((d) => !free.has(d)).sort();
+  if (filtered.length < minCount) {
+    throw new Error(
+      `Disposable replace rejected after free-provider exclusion: ${filtered.length} domains ` +
+        `(min ${minCount}). Previous dataset left unchanged.`,
+    );
+  }
+
+  const file = ensureDisposableDatasetFile();
   const now = new Date().toISOString();
   const body = [
     '# MailSure MCP disposable domain dataset',
     `# Source: ${sourceLabel}`,
     `# Updated: ${now}`,
     '# One domain per line. Lines starting with # are comments.',
+    '# Free email providers are stripped on write and never classified as disposable.',
     '',
-    ...sorted,
+    ...filtered,
     '',
   ].join('\n');
-  writeFileSync(file, body, 'utf8');
+
+  const dir = path.dirname(file);
+  const tmp = path.join(dir, `.disposable-domains.${process.pid}.${Date.now()}.tmp`);
+  try {
+    writeFileSync(tmp, body, 'utf8');
+    renameSync(tmp, file);
+  } catch (err) {
+    try {
+      if (existsSync(tmp)) unlinkSync(tmp);
+    } catch {
+      /* ignore cleanup errors */
+    }
+    throw err;
+  }
+
   domainSet = null;
   meta = null;
   return getDisposableMeta();
@@ -143,9 +229,11 @@ export function updateDisposableDomainsFromText(
 
 /**
  * Fetch a public disposable domain list (opt-in). Documented sources only.
+ * Uses fail-safe replace (keeps previous file if download/parse/size checks fail).
  */
 export async function updateDisposableDomainsFromUrl(
   url: string,
+  options: { mode?: 'merge' | 'replace'; minCount?: number } = {},
 ): Promise<DisposableDatasetMeta> {
   const allowedHosts = new Set([
     'raw.githubusercontent.com',
@@ -162,11 +250,24 @@ export async function updateDisposableDomainsFromUrl(
   }
   const res = await fetch(url, {
     headers: { Accept: 'text/plain,*/*' },
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(60_000),
   });
   if (!res.ok) {
     throw new Error(`Failed to download disposable list: HTTP ${res.status}`);
   }
   const text = await res.text();
-  return updateDisposableDomainsFromText(text, url);
+  if (!text || !text.trim()) {
+    throw new Error('Failed to download disposable list: empty body');
+  }
+  const mode = options.mode ?? 'replace';
+  if (mode === 'merge') {
+    return updateDisposableDomainsFromText(text, url);
+  }
+  return replaceDisposableDomainsFromText(text, url, { minCount: options.minCount });
+}
+
+/** Test helper — clear in-memory cache between suites. */
+export function resetDisposableCache(): void {
+  domainSet = null;
+  meta = null;
 }
