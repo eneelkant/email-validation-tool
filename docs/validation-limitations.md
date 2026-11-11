@@ -28,6 +28,16 @@ Full status table: [validation-statuses.md](./validation-statuses.md).
 - Probes never send mail (`MAIL FROM:<>` / RCPT only when enabled).
 - Prefer leaving SMTP off for bulk CSV of third-party prospect lists.
 
+## Optional remote Reacher SMTP
+
+- Separate service (`eneelkant/reacher-render-deploy`); **not** merged into this repo.
+- Opt-in via `REACHER_ENABLED` / `REACHER_API_URL` / `REACHER_TIMEOUT` (default off = unchanged behavior).
+- Precedence: Reacher first; local SMTP only as fallback when Reacher fails **and** `OPENVERIFY_SMTP_ENABLED=true`.
+- Failures/timeouts → `temporary_error` / `unknown` / overall `risky|unknown` — **never** false Invalid.
+- Do not treat Reacher `is_reachable` as MailSure’s verdict.
+- Render Free Reacher instances may **cold-start** (multi-second to minute); keep timeouts modest or use an always-on instance.
+- Trial image quota (~10k/day) and anonymized metrics — see Reacher trial terms. Lower `OPENVERIFY_CONCURRENCY` when Reacher is enabled.
+
 ## Domain validity vs mailbox verification
 
 ```

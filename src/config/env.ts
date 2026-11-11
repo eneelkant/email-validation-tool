@@ -58,6 +58,10 @@ const EnvSchema = z.object({
   OPENVERIFY_SMTP_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   OPENVERIFY_SMTP_CONCURRENCY: z.coerce.number().int().positive().default(2),
   OPENVERIFY_CATCH_ALL_ENABLED: bool(false),
+  // Optional remote Reacher SMTP (separate deploy). Names are REACHER_* by design.
+  REACHER_ENABLED: bool(false),
+  REACHER_API_URL: z.string().optional().default(''),
+  REACHER_TIMEOUT: z.coerce.number().int().positive().default(15_000),
   OPENVERIFY_LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
     .default('info'),
@@ -98,6 +102,11 @@ export type AppConfig = {
   smtpTimeoutMs: number;
   smtpConcurrency: number;
   catchAllEnabled: boolean;
+  /** Remote Reacher SMTP provider (opt-in). When false, behavior matches pre-Reacher MailSure. */
+  reacherEnabled: boolean;
+  /** Origin only (no path), e.g. https://reacher-render-deploy.onrender.com */
+  reacherApiUrl: string;
+  reacherTimeoutMs: number;
   logLevel: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace';
   logEmails: boolean;
   jobRetentionDays: number;
@@ -240,6 +249,57 @@ export function resolveHttpHost(
   return configuredHost;
 }
 
+/**
+ * Normalize REACHER_API_URL to an http(s) origin with no path/query/hash.
+ * Empty string is allowed when Reacher is disabled.
+ */
+export function normalizeReacherApiUrl(raw: string): string {
+  const trimmed = raw.trim().replace(/\/+$/, '');
+  if (!trimmed) return '';
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    throw new Error(
+      `REACHER_API_URL must be a valid absolute URL (got "${raw.trim()}"). ` +
+        'Example: https://reacher-render-deploy.onrender.com',
+    );
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error(
+      `REACHER_API_URL must use http or https (got protocol "${url.protocol}").`,
+    );
+  }
+  if (url.username || url.password) {
+    throw new Error('REACHER_API_URL must not include credentials.');
+  }
+  const path = url.pathname.replace(/\/+$/, '') || '';
+  if (path && path !== '') {
+    throw new Error(
+      'REACHER_API_URL must be an origin only (no path). ' +
+        'MailSure appends /v1/check_email. Example: https://reacher-render-deploy.onrender.com',
+    );
+  }
+  if (url.search || url.hash) {
+    throw new Error('REACHER_API_URL must not include query string or hash.');
+  }
+  return `${url.protocol}//${url.host}`;
+}
+
+/**
+ * Fail closed when Reacher is enabled without a usable API origin.
+ */
+export function assertReacherConfig(
+  cfg: Pick<AppConfig, 'reacherEnabled' | 'reacherApiUrl'> = getConfig(),
+): void {
+  if (!cfg.reacherEnabled) return;
+  if (cfg.reacherApiUrl) return;
+  throw new Error(
+    'REACHER_API_URL is required when REACHER_ENABLED=true. ' +
+      'Set the Reacher service origin (no path), or set REACHER_ENABLED=false.',
+  );
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const parsed = EnvSchema.parse(env);
   const ephemeralStorage = parsed.OPENVERIFY_EPHEMERAL_STORAGE;
@@ -292,12 +352,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     smtpTimeoutMs: parsed.OPENVERIFY_SMTP_TIMEOUT_MS,
     smtpConcurrency: parsed.OPENVERIFY_SMTP_CONCURRENCY,
     catchAllEnabled: parsed.OPENVERIFY_CATCH_ALL_ENABLED,
+    reacherEnabled: parsed.REACHER_ENABLED,
+    reacherApiUrl: normalizeReacherApiUrl(parsed.REACHER_API_URL ?? ''),
+    reacherTimeoutMs: parsed.REACHER_TIMEOUT,
     logLevel: parsed.OPENVERIFY_LOG_LEVEL,
     logEmails: parsed.OPENVERIFY_LOG_EMAILS,
     jobRetentionDays: parsed.OPENVERIFY_JOB_RETENTION_DAYS,
     version: parsed.npm_package_version ?? '0.1.0',
     roleLocalParts: DEFAULT_ROLE_LOCAL_PARTS,
   };
+
+  // Fail closed before serving when Reacher is enabled without an API origin.
+  assertReacherConfig(config);
 
   // Never mkdir under /var/task (guarded inside ensureDir). Ephemeral remaps land in tmpdir.
   for (const dir of [config.dataDir, config.uploadDir, config.outputDir]) {

@@ -6,6 +6,7 @@ All notable changes to MailSure MCP will be documented in this file.
 
 ### Added
 
+- Optional remote Reacher SMTP provider (`REACHER_ENABLED` / `REACHER_API_URL` / `REACHER_TIMEOUT`): orchestrator calls separate `POST /v1/check_email` after DNS; maps `smtp.*` into MailSure statuses; never uses raw `is_reachable` as verdict; local SMTP remains fallback; failures/timeouts stay temporary/unknown (not false Invalid)
 - Render Blueprint `render.yaml` for Web Service **mailsure-api** (Docker, health `/health`, website API + Pages CORS, free-tier **no persistent disk** / ephemeral `/data`, secrets via Render)
 - `OPENVERIFY_EPHEMERAL_STORAGE` + optional `OPENVERIFY_DB_PATH=:memory:`; CSV upload cleanup after MCP jobs; `/health` reports `storage` / `db`
 - Docs: `docs/render-deploy.md` (Blueprint creation steps; no invented Render URL)

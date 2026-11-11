@@ -66,6 +66,13 @@ services:
         value: info
       - key: OPENVERIFY_SMTP_ENABLED
         value: "false"
+      # Optional remote Reacher (separate deploy). Default off — set URL in dashboard when enabling.
+      - key: REACHER_ENABLED
+        value: "false"
+      - key: REACHER_API_URL
+        value: ""
+      - key: REACHER_TIMEOUT
+        value: "15000"
       - key: OPENVERIFY_LOG_EMAILS
         value: "false"
       # Secrets / operator-supplied — never hardcode credentials in this file.
