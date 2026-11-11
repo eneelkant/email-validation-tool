@@ -311,7 +311,12 @@ export async function fetchWithSafeTimeout(
 
   try {
     return await Promise.race([
-      fetchImpl(url, { ...init, signal: controller.signal }),
+      fetchImpl(url, {
+        ...init,
+        // Never follow redirects (SSRF: REACHER_API_URL must not bounce to internals).
+        redirect: 'error',
+        signal: controller.signal,
+      }),
       timeoutPromise,
     ]);
   } finally {
@@ -397,7 +402,7 @@ export async function checkEmailWithReacher(
     const timedOut =
       name === 'TimeoutError' ||
       name === 'AbortError' ||
-      /timeout|aborted/i.test(msg);
+      /timed\s*out|timeout|aborted/i.test(msg);
 
     log.debug({ err: msg.slice(0, 120) }, 'Reacher request failed');
 

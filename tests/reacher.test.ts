@@ -45,6 +45,24 @@ describe('normalizeReacherApiUrl / assertReacherConfig', () => {
     ).toThrow(/origin only/);
   });
 
+  it('rejects cloud metadata / link-local hosts (SSRF)', () => {
+    expect(() => normalizeReacherApiUrl('http://169.254.169.254')).toThrow(
+      /blocked/,
+    );
+    expect(() => normalizeReacherApiUrl('http://metadata.google.internal')).toThrow(
+      /blocked/,
+    );
+  });
+
+  it('ignores invalid URL when Reacher is disabled', () => {
+    process.env.REACHER_ENABLED = 'false';
+    process.env.REACHER_API_URL = 'http://169.254.169.254';
+    resetConfigCache();
+    const cfg = loadConfig();
+    expect(cfg.reacherEnabled).toBe(false);
+    expect(cfg.reacherApiUrl).toBe('');
+  });
+
   it('fail-closes when enabled without URL', () => {
     process.env.REACHER_ENABLED = 'true';
     process.env.REACHER_API_URL = '';
@@ -382,6 +400,7 @@ describe('checkEmailWithReacher (mocked fetch)', () => {
     const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       expect(String(url)).toBe('https://reacher.test/v1/check_email');
       expect(init?.method).toBe('POST');
+      expect(init?.redirect).toBe('error');
       expect(init?.headers).toMatchObject({ 'content-type': 'application/json' });
       expect(JSON.parse(String(init?.body))).toEqual({ to_email: 'a@example.com' });
       return new Response(

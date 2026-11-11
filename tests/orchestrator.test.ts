@@ -274,4 +274,34 @@ describe('validateEmail Reacher integration', () => {
     expect(r.overall_status).not.toBe('invalid_domain');
     expect(r.smtp_status).not.toBe('invalid');
   });
+
+  it('IpBlacklisted smtp.error alone → unknown overall, never Invalid', async () => {
+    const reacherCheck = vi.fn(async (): Promise<ReacherCheckResult> => ({
+      transportFailed: false,
+      smtp: {
+        status: 'unknown',
+        reason_codes: [
+          'REACHER_SMTP_ERROR',
+          'REACHER_ERR_SmtpError',
+          'REACHER_DESC_IpBlacklisted',
+        ],
+      },
+      catch_all_status: 'unknown',
+      catch_all_reason_codes: ['REACHER_CATCH_ALL_UNKNOWN'],
+      is_reachable_hint: 'unknown',
+    }));
+
+    const r = await validateEmail('john@example.com', {
+      dnsLookup: async () => goodDns,
+      enableReacher: true,
+      enableSmtp: false,
+      reacherCheck,
+    });
+
+    expect(r.smtp_status).toBe('unknown');
+    expect(r.overall_status).toBe('unknown');
+    expect(r.overall_status).not.toBe('invalid_domain');
+    expect(r.smtp_status).not.toBe('invalid');
+    expect(r.reason_codes).toContain('REACHER_DESC_IpBlacklisted');
+  });
 });

@@ -250,9 +250,27 @@ export function resolveHttpHost(
   return configuredHost;
 }
 
+/** Hostnames that must never be used as REACHER_API_URL (SSRF / metadata). */
+const REACHER_BLOCKED_HOSTS = new Set([
+  'metadata.google.internal',
+  'metadata.google',
+  'kubernetes.default',
+  'kubernetes.default.svc',
+]);
+
+function isBlockedReacherHost(hostname: string): boolean {
+  const host = hostname.trim().toLowerCase().replace(/^\[|\]$/g, '');
+  if (REACHER_BLOCKED_HOSTS.has(host)) return true;
+  // Link-local / cloud metadata range (IPv4 and IPv4-mapped IPv6).
+  if (host === '169.254.169.254' || host.startsWith('169.254.')) return true;
+  if (host === '::ffff:169.254.169.254' || host.endsWith(':169.254.169.254')) return true;
+  return false;
+}
+
 /**
  * Normalize REACHER_API_URL to an http(s) origin with no path/query/hash.
  * Empty string is allowed when Reacher is disabled.
+ * Rejects credentials, non-http(s), paths, and cloud-metadata / link-local hosts.
  */
 export function normalizeReacherApiUrl(raw: string): string {
   const trimmed = raw.trim().replace(/\/+$/, '');
@@ -283,6 +301,11 @@ export function normalizeReacherApiUrl(raw: string): string {
   }
   if (url.search || url.hash) {
     throw new Error('REACHER_API_URL must not include query string or hash.');
+  }
+  if (isBlockedReacherHost(url.hostname)) {
+    throw new Error(
+      `REACHER_API_URL host "${url.hostname}" is blocked (link-local / cloud metadata).`,
+    );
   }
   return `${url.protocol}//${url.host}`;
 }
@@ -354,7 +377,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     smtpConcurrency: parsed.OPENVERIFY_SMTP_CONCURRENCY,
     catchAllEnabled: parsed.OPENVERIFY_CATCH_ALL_ENABLED,
     reacherEnabled: parsed.REACHER_ENABLED,
-    reacherApiUrl: normalizeReacherApiUrl(parsed.REACHER_API_URL ?? ''),
+    reacherApiUrl: (() => {
+      const raw = parsed.REACHER_API_URL ?? '';
+      try {
+        return normalizeReacherApiUrl(raw);
+      } catch (err) {
+        // Fail closed only when Reacher is enabled; ignore leftover junk when disabled.
+        if (parsed.REACHER_ENABLED) throw err;
+        return '';
+      }
+    })(),
     // Clamp into [1000, 60000] — same safe budget as fetchWithSafeTimeout.
     reacherTimeoutMs: Math.min(60_000, Math.max(1_000, parsed.REACHER_TIMEOUT)),
     logLevel: parsed.OPENVERIFY_LOG_LEVEL,
