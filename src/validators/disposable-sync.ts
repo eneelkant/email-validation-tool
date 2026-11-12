@@ -5,6 +5,8 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { getConfig } from '../config/env.js';
+import { readResponseTextLimited } from '../utils/bounded-response.js';
+import { mapPool } from '../utils/concurrency.js';
 import { getLogger } from '../utils/logger.js';
 import {
   getDisposableMeta,
@@ -29,6 +31,15 @@ export const DISPOSABLE_SYNC_MIN_COUNT = 5_000;
 
 /** Reject publish when new count is below previous × ratio (unless previous is below min). */
 export const DISPOSABLE_SYNC_MIN_RATIO = 0.5;
+
+/** Max concurrent source downloads (bounded; keeps merge order deterministic via mapPool). */
+export const DISPOSABLE_SYNC_CONCURRENCY = 4;
+
+/**
+ * Hard cap per source response body (stream-enforced).
+ * Upstream lists today are ~1–3 MiB; 16 MiB leaves headroom without unbounded buffering.
+ */
+export const DISPOSABLE_SYNC_MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 
 /** Last tip commit that still contained allowlist.conf (removed 2026-04-12). */
 export const DED_ALLOWLIST_FALLBACK_COMMIT = 'de9d20d740fb58c972e54f0a9fe1f2112a31ac00';
@@ -153,6 +164,10 @@ export type DisposableSyncOptions = {
   /** When true, validate thresholds but do not write the disposable file. */
   dryRun?: boolean;
   timeoutMs?: number;
+  /** Per-source body byte cap (default DISPOSABLE_SYNC_MAX_RESPONSE_BYTES). */
+  maxResponseBytes?: number;
+  /** Parallel source downloads (default DISPOSABLE_SYNC_CONCURRENCY). */
+  concurrency?: number;
 };
 
 export type DisposableSyncResult = {
@@ -275,21 +290,34 @@ export function parseDisposableSourceContent(
   return out;
 }
 
-async function downloadText(
+/**
+ * Download one allowlisted HTTPS URL.
+ * Fail-closed: redirect:'error' (no bounce), HTTPS+host pre-check, stream size cap.
+ */
+export async function downloadDisposableText(
   url: string,
   fetchImpl: FetchLike,
-  timeoutMs: number,
+  options: { timeoutMs?: number; maxBytes?: number } = {},
 ): Promise<string> {
   assertDisposableSyncUrl(url);
+  const timeoutMs = options.timeoutMs ?? 60_000;
+  const maxBytes = options.maxBytes ?? DISPOSABLE_SYNC_MAX_RESPONSE_BYTES;
+
   const res = await fetchImpl(url, {
     headers: { Accept: 'application/json,text/plain,*/*' },
     signal: AbortSignal.timeout(timeoutMs),
-    redirect: 'follow',
+    // Never follow redirects (SSRF: allowlisted URL must not bounce off-allowlist).
+    redirect: 'error',
   });
   if (!res.ok) {
+    try {
+      await res.body?.cancel();
+    } catch {
+      /* ignore */
+    }
     throw new Error(`HTTP ${res.status}`);
   }
-  const text = await res.text();
+  const text = await readResponseTextLimited(res, maxBytes);
   if (!text || !text.trim()) {
     throw new Error('empty body');
   }
@@ -299,13 +327,19 @@ async function downloadText(
 export async function fetchDisposableSource(
   source: DisposableSourceDef,
   fetchImpl: FetchLike,
-  timeoutMs = 60_000,
+  options: { timeoutMs?: number; maxBytes?: number } = {},
 ): Promise<SourceFetchResult> {
+  const timeoutMs = options.timeoutMs ?? 60_000;
+  const maxBytes = options.maxBytes ?? DISPOSABLE_SYNC_MAX_RESPONSE_BYTES;
+  // Preserve declared fallback order: primary, then fallbackUrls in array order.
   const urls = [source.url, ...(source.fallbackUrls ?? [])];
   let lastError = 'no URL attempted';
   for (const url of urls) {
     try {
-      const text = await downloadText(url, fetchImpl, timeoutMs);
+      const text = await downloadDisposableText(url, fetchImpl, {
+        timeoutMs,
+        maxBytes,
+      });
       const domains = parseDisposableSourceContent(text, source.format, {
         wildcard: source.wildcard,
       });
@@ -323,6 +357,7 @@ export async function fetchDisposableSource(
         domains,
       };
     } catch (err) {
+      // Per-URL / per-source isolation: errors stay local; caller merges survivors.
       lastError = err instanceof Error ? err.message : String(err);
     }
   }
@@ -365,6 +400,8 @@ export async function syncDisposableDomainsFromSources(
   const minRatio = options.minRatio ?? DISPOSABLE_SYNC_MIN_RATIO;
   const dryRun = options.dryRun ?? false;
   const timeoutMs = options.timeoutMs ?? 60_000;
+  const maxBytes = options.maxResponseBytes ?? DISPOSABLE_SYNC_MAX_RESPONSE_BYTES;
+  const concurrency = options.concurrency ?? DISPOSABLE_SYNC_CONCURRENCY;
 
   const cfg = getConfig();
   const freePath = cfg.freeProvidersPath;
@@ -381,25 +418,25 @@ export async function syncDisposableDomainsFromSources(
     })();
 
   const prevCount = previousDisposableCount();
-  const fetched: SourceFetchResult[] = [];
 
-  for (const source of sources) {
-    const result = await fetchDisposableSource(source, fetchImpl, timeoutMs);
-    fetched.push(result);
+  // Bounded concurrency; mapPool keeps results aligned to source declaration order.
+  const fetched = await mapPool(sources, concurrency, async (source) => {
+    const result = await fetchDisposableSource(source, fetchImpl, {
+      timeoutMs,
+      maxBytes,
+    });
     if (!result.ok) {
       log.warn({ id: source.id, error: result.error }, 'Disposable source failed');
-      if (!source.optional) {
-        // Non-optional failures are recorded; sync may still succeed if other
-        // blocklists yield enough domains. Hard-fail only when no block data.
-      }
     } else {
       log.info(
         { id: source.id, count: result.count, url: result.url },
         'Disposable source fetched',
       );
     }
-  }
+    return result;
+  });
 
+  // Deterministic merge: walk sources in declaration order (not completion order).
   const blockOk = fetched.filter((s) => s.kind === 'blocklist' && s.ok);
   const allowOk = fetched.filter((s) => s.kind === 'allowlist' && s.ok);
 

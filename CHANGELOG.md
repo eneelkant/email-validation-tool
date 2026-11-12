@@ -34,6 +34,7 @@ All notable changes to MailSure MCP will be documented in this file.
 
 ### Security
 
+- Disposable sync fetch hardening: fail-closed `redirect: 'error'`, stream-enforced max response size (Content-Length not sole check), bounded concurrency with per-source error isolation
 - HTTP auth fail-closed: non-loopback binds require `OPENVERIFY_HTTP_AUTH_TOKEN` before listen
 - Docker Compose requires an explicit auth token via `.env` interpolation
 - Website API off by default; separate rate/batch limits; does not expose MCP admin tools

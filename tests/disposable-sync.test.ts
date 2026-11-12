@@ -15,14 +15,18 @@ import {
   resetFreeProvidersCache,
 } from '../src/validators/free-provider.js';
 import {
+  downloadDisposableText,
+  fetchDisposableSource,
   normalizeDisposableDomainEntry,
   parseDisposableSourceContent,
   syncDisposableDomainsFromSources,
+  DISPOSABLE_SYNC_CONCURRENCY,
   type DisposableSourceDef,
   type FetchLike,
 } from '../src/validators/disposable-sync.js';
 import { isDisposableDomain } from '../src/validators/disposable.js';
 import { classifyProvider } from '../src/validators/provider.js';
+import { ResponseTooLargeError } from '../src/utils/bounded-response.js';
 
 function sha256(path: string): string {
   return createHash('sha256').update(readFileSync(path)).digest('hex');
@@ -363,6 +367,183 @@ describe('syncDisposableDomainsFromSources', () => {
     });
     expect(result.ok).toBe(false);
     expect(result.sources[0]?.error).toMatch(/allowlisted|Host/i);
+  });
+
+  it('fail-closed: requests use redirect=error', async () => {
+    let seenRedirect: RequestInit['redirect'] | undefined;
+    const fetchImpl: FetchLike = async (_url, init) => {
+      seenRedirect = init?.redirect;
+      return textResponse('ok.test\n', 200);
+    };
+    await downloadDisposableText(
+      'https://raw.githubusercontent.com/example/a/main/block.txt',
+      fetchImpl,
+      { maxBytes: 1024 },
+    );
+    expect(seenRedirect).toBe('error');
+  });
+
+  it('aborts oversize bodies even when Content-Length is missing or lying', async () => {
+    const maxBytes = 64;
+    const chunk = new TextEncoder().encode('a'.repeat(40));
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(chunk);
+        controller.enqueue(chunk); // 80 > 64
+        controller.close();
+      },
+    });
+    const fetchImpl: FetchLike = async () =>
+      new Response(stream, {
+        status: 200,
+        // Lying / absent length must not bypass stream enforcement.
+        headers: { 'Content-Type': 'text/plain' },
+      });
+
+    await expect(
+      downloadDisposableText(
+        'https://raw.githubusercontent.com/example/a/main/block.txt',
+        fetchImpl,
+        { maxBytes },
+      ),
+    ).rejects.toBeInstanceOf(ResponseTooLargeError);
+  });
+
+  it('rejects early when Content-Length alone exceeds max', async () => {
+    const fetchImpl: FetchLike = async () =>
+      new Response('tiny', {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/plain',
+          'Content-Length': '999999',
+        },
+      });
+
+    await expect(
+      downloadDisposableText(
+        'https://raw.githubusercontent.com/example/a/main/block.txt',
+        fetchImpl,
+        { maxBytes: 100 },
+      ),
+    ).rejects.toThrow(/Content-Length/i);
+  });
+
+  it('isolates per-source oversize errors so other sources still merge', async () => {
+    const sources: DisposableSourceDef[] = [
+      {
+        id: 'huge',
+        group: 'B',
+        kind: 'blocklist',
+        format: 'txt',
+        url: 'https://raw.githubusercontent.com/example/b/master/huge.txt',
+      },
+      {
+        id: 'ok',
+        group: 'A',
+        kind: 'blocklist',
+        format: 'txt',
+        url: 'https://raw.githubusercontent.com/example/a/main/block.txt',
+      },
+    ];
+    const okBody = Array.from({ length: 60 }, (_, i) => `ok-${i}.test`).join('\n');
+    const fetchImpl: FetchLike = async (input) => {
+      const url = String(input);
+      if (url.includes('huge')) {
+        // ~50 KiB body — over the test cap, under a normal list size.
+        return new Response('x'.repeat(50_000), {
+          status: 200,
+          headers: { 'Content-Type': 'text/plain' },
+        });
+      }
+      return textResponse(okBody, 200);
+    };
+
+    const result = await syncDisposableDomainsFromSources({
+      fetchImpl,
+      sources,
+      minCount: 50,
+      minRatio: 0.1,
+      maxResponseBytes: 4_000, // okBody fits; huge body does not
+      dryRun: true,
+    });
+
+    expect(result.sources.find((s) => s.id === 'huge')?.ok).toBe(false);
+    expect(result.sources.find((s) => s.id === 'huge')?.error).toMatch(/exceeds max/i);
+    expect(result.sources.find((s) => s.id === 'ok')?.ok).toBe(true);
+    expect(result.ok).toBe(true);
+    expect(result.count).toBeGreaterThanOrEqual(50);
+  });
+
+  it('preserves fallback URL order within a source', async () => {
+    const attempted: string[] = [];
+    const source: DisposableSourceDef = {
+      id: 'fb',
+      group: 'A',
+      kind: 'blocklist',
+      format: 'txt',
+      url: 'https://raw.githubusercontent.com/example/a/main/first.txt',
+      fallbackUrls: [
+        'https://raw.githubusercontent.com/example/a/main/second.txt',
+        'https://raw.githubusercontent.com/example/a/main/third.txt',
+      ],
+    };
+    const fetchImpl: FetchLike = async (input) => {
+      const url = String(input);
+      attempted.push(url);
+      if (url.includes('third')) {
+        return textResponse('third-ok.test\n', 200);
+      }
+      return textResponse('nope', 404);
+    };
+
+    const result = await fetchDisposableSource(source, fetchImpl, { maxBytes: 1024 });
+    expect(result.ok).toBe(true);
+    expect(result.url).toContain('third.txt');
+    expect(attempted.map((u) => u.split('/').pop())).toEqual([
+      'first.txt',
+      'second.txt',
+      'third.txt',
+    ]);
+  });
+
+  it('bounds concurrency and keeps deterministic source-order merge', async () => {
+    let inFlight = 0;
+    let peak = 0;
+    const sources: DisposableSourceDef[] = Array.from({ length: 8 }, (_, i) => ({
+      id: `s${i}`,
+      group: 'A' as const,
+      kind: 'blocklist' as const,
+      format: 'txt' as const,
+      url: `https://raw.githubusercontent.com/example/a/main/s${i}.txt`,
+    }));
+
+    const fetchImpl: FetchLike = async (input) => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      const url = String(input);
+      const id = url.split('/').pop()!.replace('.txt', '');
+      await new Promise((r) => setTimeout(r, 30));
+      inFlight -= 1;
+      // Unique domain per source so merge order of insertion is observable before sort.
+      return textResponse(`${id}.test\nshared.test\n`, 200);
+    };
+
+    const result = await syncDisposableDomainsFromSources({
+      fetchImpl,
+      sources,
+      minCount: 8,
+      minRatio: 0.01,
+      concurrency: 3,
+      dryRun: true,
+    });
+
+    expect(DISPOSABLE_SYNC_CONCURRENCY).toBe(4);
+    expect(peak).toBeLessThanOrEqual(3);
+    expect(peak).toBeGreaterThan(1);
+    expect(result.ok).toBe(true);
+    // Source summaries stay in declaration order regardless of completion timing.
+    expect(result.sources.map((s) => s.id)).toEqual(sources.map((s) => s.id));
+    expect(result.sources.every((s) => s.ok)).toBe(true);
   });
 });
 

@@ -33,4 +33,15 @@ GitHub Action: `.github/workflows/update-disposable-domains.yml` (daily + `workf
 - Upstream allowlist ∪ curated free providers are **never** written as disposable
 - `data/free-email-providers.txt` is **never** overwritten by sync
 - Atomic publish (temp → rename); abort if absolute min count or shrink-ratio checks fail
-- Per-source soft-fail; publish aborts if no blocklist data survives
+- Per-source soft-fail / error isolation; publish aborts if no blocklist data survives
+- Deterministic merge: sources fetched with bounded concurrency (default 4); results kept in declaration order; fallback URLs tried in declared order; published domain list sorted
+
+## Fetch security
+
+| Control | Behavior |
+|---------|----------|
+| HTTPS + host allowlist | Only `raw.githubusercontent.com`, `cdn.jsdelivr.net`, `disposable.github.io` |
+| Redirects | `redirect: 'error'` (fail-closed — no follow / no bounce off-allowlist) |
+| Response size | Stream-enforced per-source cap (default 16 MiB). `Content-Length` is an early reject only; bodies without / lying length are still counted and aborted mid-stream |
+| Concurrency | Bounded pool (~4); one source failure (oversize, HTTP error, parse error) does not cancel siblings |
+| Runtime path | Sync is opt-in CLI / Action only — never on each validation request |
