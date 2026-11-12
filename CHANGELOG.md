@@ -36,7 +36,7 @@ All notable changes to MailSure MCP will be documented in this file.
 
 ### Fixed
 
-- Free-provider blank CSV/API fields: rehydrate stale cache / legacy payloads missing `is_free_provider` / `provider_type`; Docker sets `OPENVERIFY_FREE_PROVIDERS_PATH`; empty free-provider file falls back to seed; `/health` reports `free_providers` + `classification_schema`; frontend rejects responses omitting provider fields
+- Free-provider blank CSV/API fields: rehydrate stale cache / legacy payloads missing `is_free_provider` / `provider_type` (including valid-syntax null / partial null); Docker sets `OPENVERIFY_FREE_PROVIDERS_PATH`; empty free-provider file falls back to seed; `/health` reports `free_providers` + `classification_schema`; frontend rejects responses omitting provider fields
 - Ephemeral storage on Enzonic/Lambda: `OPENVERIFY_EPHEMERAL_STORAGE=true` remaps `/var/task` (and `/var/runtime`) paths to `os.tmpdir()` so startup never `mkdir`s under the read-only package root; Render `/data` and local paths unchanged
 - HTTP transport binds and serves `/health` before SQLite/disposable init; `/ready` and DB-dependent `/api` + MCP routes stay 503 until ready (or degraded on init failure)
 - Cloud `PORT` without explicit `OPENVERIFY_HTTP_HOST` binds `0.0.0.0` (local default stays `127.0.0.1` when `PORT` unset)

@@ -375,3 +375,319 @@ describe('frontend rejects API payloads missing free-provider fields', () => {
     expect(row[typeIdx]).toBe('');
   });
 });
+
+/**
+ * Phase 3 — null / partial-null classification rehydration.
+ * Valid syntax with null provider fields must reclassify; invalid syntax keeps nulls;
+ * complete valid results stay untouched.
+ */
+describe('Phase 3 null-classification rehydration', () => {
+  beforeAll(() => {
+    resetConfigCache();
+    loadConfig();
+    closeDb();
+    getDb();
+    resetFreeProvidersCache();
+    resetDisposableCache();
+    ensureFreeProvidersDatasetFile();
+    ensureDisposableDatasetFile();
+    loadFreeProviders(true);
+    loadDisposableDomains(true);
+  });
+
+  beforeEach(() => {
+    resetFreeProvidersCache();
+    resetDisposableCache();
+    loadFreeProviders(true);
+    loadDisposableDomains(true);
+  });
+
+  afterAll(() => {
+    closeDb();
+  });
+
+  function validNullProvider(email: string, extras: Partial<ValidationResult> = {}): ValidationResult {
+    return {
+      email,
+      normalized_email: email.toLowerCase(),
+      syntax_valid: true,
+      domain_exists: true,
+      mx_exists: true,
+      is_disposable: null,
+      is_free_provider: null,
+      provider_type: null,
+      is_role_based: false,
+      smtp_status: 'not_checked',
+      catch_all_status: 'not_checked',
+      overall_status: 'valid_domain',
+      confidence: 'medium',
+      reason_codes: ['SMTP_DISABLED', 'CATCH_ALL_DISABLED'],
+      checked_at: '2026-11-12T09:00:00.000Z',
+      mx_hosts: ['mx.example'],
+      ...extras,
+    };
+  }
+
+  it('treats null and partial-null free fields as missing', () => {
+    expect(
+      missingProviderClassification(
+        validNullProvider('test@gmail.com'),
+      ),
+    ).toBe(true);
+    expect(
+      missingProviderClassification({
+        ...validNullProvider('test@gmail.com'),
+        is_free_provider: true,
+        provider_type: null,
+      }),
+    ).toBe(true);
+    expect(
+      missingProviderClassification({
+        ...validNullProvider('test@gmail.com'),
+        is_free_provider: null,
+        provider_type: 'free',
+      }),
+    ).toBe(true);
+    expect(
+      missingProviderClassification({
+        ...validNullProvider('test@gmail.com'),
+        is_disposable: false,
+        is_free_provider: true,
+        provider_type: 'free',
+      }),
+    ).toBe(false);
+  });
+
+  it('rehydrates null free fields for gmail/outlook/yahoo/qq', () => {
+    for (const email of FREE_MAJORS) {
+      const fixed = ensureProviderClassification(validNullProvider(email));
+      expect(fixed.is_free_provider, email).toBe(true);
+      expect(fixed.provider_type, email).toBe('free');
+      expect(fixed.is_disposable, email).toBe(false);
+      expect(fixed.reason_codes, email).toContain('FREE_EMAIL_PROVIDER');
+    }
+  });
+
+  it('rehydrates null fields for disposable domains', () => {
+    const fixed = ensureProviderClassification(
+      validNullProvider('a@mailinator.com', { overall_status: 'disposable' }),
+    );
+    expect(fixed.is_disposable).toBe(true);
+    expect(fixed.is_free_provider).toBe(false);
+    expect(fixed.provider_type).toBe('disposable');
+    expect(fixed.reason_codes).toContain('DISPOSABLE_DOMAIN');
+  });
+
+  it('keeps nulls for invalid syntax', () => {
+    const invalid: ValidationResult = {
+      email: 'not-an-email',
+      normalized_email: 'not-an-email',
+      syntax_valid: false,
+      domain_exists: null,
+      mx_exists: null,
+      is_disposable: null,
+      is_free_provider: null,
+      provider_type: null,
+      is_role_based: null,
+      smtp_status: 'not_checked',
+      catch_all_status: 'not_checked',
+      overall_status: 'invalid_syntax',
+      confidence: 'high',
+      reason_codes: ['MISSING_AT'],
+      checked_at: '2026-11-12T09:00:00.000Z',
+    };
+    expect(missingProviderClassification(invalid)).toBe(true);
+    const fixed = ensureProviderClassification(invalid);
+    expect(fixed.is_free_provider).toBeNull();
+    expect(fixed.provider_type).toBeNull();
+    expect(fixed.is_disposable).toBeNull();
+    expect(fixed.syntax_valid).toBe(false);
+  });
+
+  it('leaves complete valid classification unchanged (identity)', () => {
+    const complete: ValidationResult = {
+      email: 'user@corp.example',
+      normalized_email: 'user@corp.example',
+      syntax_valid: true,
+      domain_exists: true,
+      mx_exists: true,
+      is_disposable: false,
+      is_free_provider: false,
+      provider_type: 'custom',
+      is_role_based: false,
+      smtp_status: 'not_checked',
+      catch_all_status: 'not_checked',
+      overall_status: 'valid_domain',
+      confidence: 'medium',
+      reason_codes: ['SMTP_DISABLED'],
+      checked_at: '2026-11-12T09:00:00.000Z',
+    };
+    expect(missingProviderClassification(complete)).toBe(false);
+    const out = ensureProviderClassification(complete);
+    expect(out).toBe(complete); // same reference — early return
+    expect(out.is_free_provider).toBe(false);
+    expect(out.provider_type).toBe('custom');
+  });
+
+  it('cache read rehydrates rows with explicit null free fields', () => {
+    const nullRow = validNullProvider('test@gmail.com');
+    const db = getDb();
+    const expires = new Date(Date.now() + 3600_000).toISOString();
+    db.prepare(
+      `INSERT INTO validation_cache (email_hash, normalized_email, result_json, overall_status, checked_at, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(email_hash) DO UPDATE SET
+         result_json = excluded.result_json,
+         overall_status = excluded.overall_status,
+         checked_at = excluded.checked_at,
+         expires_at = excluded.expires_at`,
+    ).run(
+      createHash('sha256').update('test@gmail.com').digest('hex'),
+      'test@gmail.com',
+      JSON.stringify(nullRow),
+      'valid_domain',
+      nullRow.checked_at,
+      expires,
+    );
+    const cached = getCachedValidation('test@gmail.com');
+    expect(cached).not.toBeNull();
+    expect(cached!.is_free_provider).toBe(true);
+    expect(cached!.provider_type).toBe('free');
+    expect(cached!.is_disposable).toBe(false);
+  });
+
+  it('server CSV rehydrates null free fields for majors + disposable', async () => {
+    const cfg = getConfig();
+    const input = path.join(cfg.uploadDir, 'phase3-null-classification.csv');
+    writeFileSync(
+      input,
+      'email\ntest@gmail.com\nuser@outlook.com\na@yahoo.com\nb@qq.com\nx@mailinator.com\n',
+      'utf8',
+    );
+    const job = await startCsvValidationJob({
+      inputPath: input,
+      wait: true,
+      concurrency: 1,
+      hooks: {
+        validateBatch: async (emails) =>
+          emails.map((email) =>
+            email.includes('mailinator')
+              ? validNullProvider(email, { overall_status: 'disposable' })
+              : validNullProvider(email),
+          ),
+      },
+    });
+    expect(job.status).toBe('completed');
+    const out = readFileSync(job.output_path!, 'utf8');
+    const lines = out.trim().split(/\r?\n/);
+    const cols = lines[0]!.split(',');
+    const freeIdx = cols.indexOf('is_free_provider');
+    const typeIdx = cols.indexOf('provider_type');
+    const dispIdx = cols.indexOf('is_disposable');
+    expect(freeIdx).toBeGreaterThan(-1);
+    expect(typeIdx).toBeGreaterThan(-1);
+
+    const byEmail = new Map<string, string[]>();
+    for (const line of lines.slice(1)) {
+      const row = line.split(',');
+      byEmail.set(row[0]!, row);
+    }
+    for (const email of ['test@gmail.com', 'user@outlook.com', 'a@yahoo.com', 'b@qq.com']) {
+      const row = byEmail.get(email)!;
+      expect(row[freeIdx], email).toBe('true');
+      expect(row[typeIdx], email).toBe('free');
+      expect(row[dispIdx], email).toBe('false');
+    }
+    const disp = byEmail.get('x@mailinator.com')!;
+    expect(disp[freeIdx]).toBe('false');
+    expect(disp[typeIdx]).toBe('disposable');
+    expect(disp[dispIdx]).toBe('true');
+  });
+});
+
+describe('Phase 3 website API null-payload rehydration', () => {
+  let server: Server;
+  let base: string;
+
+  beforeAll(async () => {
+    resetConfigCache();
+    process.env.OPENVERIFY_HTTP_AUTH_TOKEN = '';
+    process.env.OPENVERIFY_HTTP_HOST = '127.0.0.1';
+    process.env.OPENVERIFY_WEBSITE_API_ENABLED = 'true';
+    process.env.OPENVERIFY_WEBSITE_MAX_BATCH_SIZE = '10';
+    process.env.OPENVERIFY_WEBSITE_RATE_LIMIT_MAX = '100';
+    process.env.OPENVERIFY_CORS_ORIGINS = '';
+    process.env.OPENVERIFY_ALLOWED_HOSTS = '127.0.0.1,localhost';
+    loadConfig();
+    closeDb();
+    getDb();
+    resetFreeProvidersCache();
+    resetDisposableCache();
+    ensureFreeProvidersDatasetFile();
+    ensureDisposableDatasetFile();
+    loadFreeProviders(true);
+    loadDisposableDomains(true);
+
+    // Seed cache with valid-syntax null classification for gmail.
+    const nullRow = {
+      email: 'test@gmail.com',
+      normalized_email: 'test@gmail.com',
+      syntax_valid: true,
+      domain_exists: true,
+      mx_exists: true,
+      is_disposable: null,
+      is_free_provider: null,
+      provider_type: null,
+      is_role_based: false,
+      smtp_status: 'not_checked',
+      catch_all_status: 'not_checked',
+      overall_status: 'valid_domain',
+      confidence: 'medium',
+      reason_codes: ['SMTP_DISABLED', 'CATCH_ALL_DISABLED'],
+      checked_at: '2026-11-12T09:00:00.000Z',
+      mx_hosts: ['mx.gmail.com'],
+    } satisfies ValidationResult;
+    const db = getDb();
+    const expires = new Date(Date.now() + 3600_000).toISOString();
+    db.prepare(
+      `INSERT INTO validation_cache (email_hash, normalized_email, result_json, overall_status, checked_at, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(email_hash) DO UPDATE SET
+         result_json = excluded.result_json,
+         overall_status = excluded.overall_status,
+         checked_at = excluded.checked_at,
+         expires_at = excluded.expires_at`,
+    ).run(
+      createHash('sha256').update('test@gmail.com').digest('hex'),
+      'test@gmail.com',
+      JSON.stringify(nullRow),
+      'valid_domain',
+      nullRow.checked_at,
+      expires,
+    );
+
+    const started = await listen(createHttpApp());
+    server = started.server;
+    base = started.base;
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve, reject) =>
+      server.close((err) => (err ? reject(err) : resolve())),
+    );
+    closeDb();
+  });
+
+  it('GET path via batch serves rehydrated free fields from null cache', async () => {
+    const res = await fetch(`${base}/api/verify/batch`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ emails: ['test@gmail.com'] }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { results: ValidationResult[] };
+    expect(body.results[0]!.is_free_provider).toBe(true);
+    expect(body.results[0]!.provider_type).toBe('free');
+    expect(body.results[0]!.is_disposable).toBe(false);
+  });
+});
