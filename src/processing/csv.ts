@@ -20,6 +20,7 @@ import { sanitizeCsvCell } from '../security/csv.js';
 import { sanitizeErrorMessage } from '../security/http-guards.js';
 import { verifyEmailsBatch } from './batch.js';
 import type { ValidationResult } from '../types/results.js';
+import { ensureProviderClassification } from '../validators/result-normalize.js';
 
 const log = getLogger('csv');
 
@@ -325,15 +326,26 @@ export async function processCsvJob(
 
       // mapPool may leave holes when shouldStop trips mid-batch — never write undefined results.
       for (let j = 0; j < batch.length; j++) {
-        const result = results[j];
-        if (!result) {
+        const raw = results[j];
+        if (!raw) {
           cancelled = true;
           break;
         }
+        // Normalize so stale/partial results never emit blank free-provider CSV cells.
+        const result = ensureProviderClassification(raw);
         const row = batch[j]!;
         processed += 1;
         if (result.syntax_valid) succeeded += 1;
         else failed += 1;
+
+        const freeProvider =
+          result.is_free_provider === null || result.is_free_provider === undefined
+            ? ''
+            : String(result.is_free_provider);
+        const providerType =
+          result.provider_type === null || result.provider_type === undefined
+            ? ''
+            : String(result.provider_type);
 
         await writeRowWithBackpressure(writers.stringifier, {
           ...Object.fromEntries(
@@ -343,10 +355,10 @@ export async function processCsvJob(
           syntax_valid: String(result.syntax_valid),
           domain_exists: String(result.domain_exists),
           mx_exists: String(result.mx_exists),
-          is_disposable: String(result.is_disposable),
-          is_free_provider: String(result.is_free_provider),
-          provider_type: String(result.provider_type ?? ''),
-          is_role_based: String(result.is_role_based),
+          is_disposable: String(result.is_disposable ?? ''),
+          is_free_provider: freeProvider,
+          provider_type: providerType,
+          is_role_based: String(result.is_role_based ?? ''),
           smtp_status: result.smtp_status,
           catch_all_status: result.catch_all_status,
           overall_status: result.overall_status,

@@ -14,6 +14,7 @@ import {
   getRuntimeLifecycle,
   isRuntimeReady,
 } from '../runtime/lifecycle.js';
+import { getFreeProvidersMeta } from '../validators/free-provider.js';
 import { mountWebsiteApi } from './website-api.js';
 
 const log = getLogger('http');
@@ -104,6 +105,14 @@ export function createHttpApp(): Express {
   app.get('/health', (_req: Request, res: Response) => {
     const life = getRuntimeLifecycle();
     const status = getHealthStatus();
+    let freeProvidersCount: number | null = null;
+    if (life.dbStatus === 'ready') {
+      try {
+        freeProvidersCount = getFreeProvidersMeta().count;
+      } catch {
+        freeProvidersCount = null;
+      }
+    }
     const body = {
       status,
       service: 'mailsure-api',
@@ -112,6 +121,9 @@ export function createHttpApp(): Express {
       storage: cfg.ephemeralStorage ? 'ephemeral' : 'persistent',
       db: describeDbBackend(cfg.dbPath),
       db_status: life.dbStatus,
+      // Ops signal: 0/null after ready ⇒ free-provider dataset failed to load (blank CSV risk).
+      free_providers: freeProvidersCount,
+      classification_schema: 2,
     };
     if (status === 'degraded') {
       res.status(503).json(body);

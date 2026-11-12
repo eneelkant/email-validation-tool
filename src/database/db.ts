@@ -5,6 +5,7 @@ import path from 'node:path';
 import { getConfig, isMemoryDbPath, isReadonlyDeployPath } from '../config/env.js';
 import type { DomainCheckResult, JobStatus, ValidationResult } from '../types/results.js';
 import { getLogger } from '../utils/logger.js';
+import { ensureProviderClassification } from '../validators/result-normalize.js';
 import { MIGRATIONS } from './migrations.js';
 
 const log = getLogger('db');
@@ -97,7 +98,8 @@ export function getCachedValidation(normalizedEmail: string): ValidationResult |
     | undefined;
   if (!row) return null;
   try {
-    return JSON.parse(row.result_json) as ValidationResult;
+    // Rehydrate pre-classification-schema cache rows that omit free-provider fields.
+    return ensureProviderClassification(JSON.parse(row.result_json) as ValidationResult);
   } catch {
     return null;
   }
