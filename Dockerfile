@@ -21,7 +21,8 @@ ENV NODE_ENV=production \
     OPENVERIFY_DB_PATH=/data/openverify.sqlite \
     OPENVERIFY_UPLOAD_DIR=/data/uploads \
     OPENVERIFY_OUTPUT_DIR=/data/output \
-    OPENVERIFY_DISPOSABLE_PATH=/app/data/disposable-domains.txt
+    OPENVERIFY_DISPOSABLE_PATH=/app/data/disposable-domains.txt \
+    OPENVERIFY_FREE_PROVIDERS_PATH=/app/data/free-email-providers.txt
 RUN useradd --system --uid 10001 --create-home openverify \
   && mkdir -p /data/uploads /data/output \
   && chown -R openverify:openverify /data

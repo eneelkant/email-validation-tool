@@ -18,6 +18,7 @@ import {
   updateDisposableDomainsFromUrl,
 } from '../validators/disposable.js';
 import { getFreeProvidersMeta, loadFreeProviders } from '../validators/free-provider.js';
+import { ensureProviderClassification } from '../validators/result-normalize.js';
 import { checkDomain, validateEmail } from '../validators/orchestrator.js';
 import { getCachedValidation, setCachedValidation } from '../database/db.js';
 import { validateSyntax } from '../validators/syntax.js';
@@ -71,7 +72,7 @@ export function registerTools(server: McpServer): void {
           const cached = getCachedValidation(syntax.normalized_email);
           if (cached) return textResult({ ...cached, cached: true });
         }
-        const result = await validateEmail(email);
+        const result = ensureProviderClassification(await validateEmail(email));
         if (result.syntax_valid && result.overall_status !== 'temporary_error') {
           setCachedValidation(result);
         }

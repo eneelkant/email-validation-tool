@@ -81,6 +81,15 @@ export function loadFreeProviders(force = false): Set<string> {
     if (!t || t.startsWith('#')) continue;
     domains.add(t.replace(/\.$/, ''));
   }
+  // Never serve an empty free-provider set — majors would silently classify as custom
+  // and CSV/UI would look "blank" relative to expected free labels after a bad package.
+  if (domains.size === 0) {
+    for (const d of DEFAULT_SEED) domains.add(d);
+    log.warn(
+      { file, seed: DEFAULT_SEED.length },
+      'Free providers file empty; using in-process DEFAULT_SEED fallback',
+    );
+  }
   const hash = createHash('sha256').update(text).digest('hex').slice(0, 12);
   const updatedMatch = text.match(/Updated:\s*(\S+)/i);
   meta = {
