@@ -1,0 +1,70 @@
+name: Update disposable domains
+
+# Daily multi-source refresh of the vendored disposable blocklist.
+# Opens an automation PR — never pushes to main, never auto-merges.
+# Does not run on every validation request. On failure the existing file stays.
+
+on:
+  schedule:
+    # Daily 06:20 UTC
+    - cron: '20 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Multi-source disposable sync (fail-safe)
+        id: sync
+        run: |
+          set -euo pipefail
+          # Point at repo data files explicitly (not runtime tmp).
+          export OPENVERIFY_DISPOSABLE_PATH="$GITHUB_WORKSPACE/data/disposable-domains.txt"
+          export OPENVERIFY_FREE_PROVIDERS_PATH="$GITHUB_WORKSPACE/data/free-email-providers.txt"
+          FREE_BEFORE=$(sha256sum "$OPENVERIFY_FREE_PROVIDERS_PATH" | awk '{print $1}')
+          npm run update:disposable
+          FREE_AFTER=$(sha256sum "$OPENVERIFY_FREE_PROVIDERS_PATH" | awk '{print $1}')
+          if [ "$FREE_BEFORE" != "$FREE_AFTER" ]; then
+            echo "Refusing: free-email-providers.txt must not change during disposable sync"
+            exit 1
+          fi
+
+      - name: Create pull request if changed
+        if: success()
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: 'chore: refresh disposable domains (multi-source)'
+          title: 'chore: refresh disposable domains (multi-source)'
+          body: |
+            Automated multi-source refresh of `data/disposable-domains.txt`.
+
+            **Sources**
+            - A: [disposable-email-domains/disposable-email-domains](https://github.com/disposable-email-domains/disposable-email-domains) blocklist (+ allowlist when available)
+            - B: [disposable/disposable-email-domains](https://github.com/disposable/disposable-email-domains) `domains.txt` / `domains_strict.txt` / `domains.json`
+            - C: [FGRibreau/mailchecker](https://github.com/FGRibreau/mailchecker) `list.txt`
+            - D: [ivolo/disposable-email-domains](https://github.com/ivolo/disposable-email-domains) exact + wildcard JSON
+
+            **Guarantees**
+            - Fail-safe: aborts without changing the file if download/parse/size/shrink checks fail
+            - Allowlist + curated `data/free-email-providers.txt` domains are excluded (free never disposable)
+            - `free-email-providers.txt` is never overwritten
+            - No per-request download; runtime uses the vendored snapshot only
+            - This PR is opened by automation — **not** pushed to `main` and **not** auto-merged
+          branch: chore/update-disposable-domains
+          delete-branch: true
+          add-paths: |
+            data/disposable-domains.txt

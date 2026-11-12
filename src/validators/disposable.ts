@@ -10,8 +10,12 @@ import {
 import path from 'node:path';
 import { getConfig, isReadonlyDeployPath } from '../config/env.js';
 import { getLogger } from '../utils/logger.js';
+import { readResponseTextLimited } from '../utils/bounded-response.js';
 import { domainOrParentInSet, parseDomainListText } from './domain-set.js';
 import { isFreeProviderDomain, loadFreeProviders } from './free-provider.js';
+
+/** Max body size for single-URL disposable refresh (stream-enforced). */
+const DISPOSABLE_URL_MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 
 const log = getLogger('disposable');
 
@@ -238,6 +242,7 @@ export async function updateDisposableDomainsFromUrl(
   const allowedHosts = new Set([
     'raw.githubusercontent.com',
     'cdn.jsdelivr.net',
+    'disposable.github.io',
   ]);
   const parsed = new URL(url);
   if (parsed.protocol !== 'https:') {
@@ -251,11 +256,18 @@ export async function updateDisposableDomainsFromUrl(
   const res = await fetch(url, {
     headers: { Accept: 'text/plain,*/*' },
     signal: AbortSignal.timeout(60_000),
+    // Fail-closed: never follow redirects off the allowlisted URL.
+    redirect: 'error',
   });
   if (!res.ok) {
+    try {
+      await res.body?.cancel();
+    } catch {
+      /* ignore */
+    }
     throw new Error(`Failed to download disposable list: HTTP ${res.status}`);
   }
-  const text = await res.text();
+  const text = await readResponseTextLimited(res, DISPOSABLE_URL_MAX_RESPONSE_BYTES);
   if (!text || !text.trim()) {
     throw new Error('Failed to download disposable list: empty body');
   }

@@ -24,7 +24,8 @@ npm run build
 | `npm run build` | Compile `src/` → `dist/` |
 | `npm run start:stdio` | Run MCP over STDIO |
 | `npm run start:http` | Run Streamable HTTP MCP |
-| `npm run update:disposable` | Opt-in fail-safe disposable list refresh (replace; strips free providers) |
+| `npm run update:disposable` | Opt-in multi-source disposable sync (fail-safe replace; strips allowlist + free providers). `--url` for single-source; `--dry-run` to validate without writing |
+| `.github/workflows/update-disposable-domains.yml` | Daily + manual Action that runs the sync and opens an automation PR (never pushes `main`, never auto-merges) |
 
 ## Guidelines
 

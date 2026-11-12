@@ -5,7 +5,7 @@ MailSure MCP is a modular TypeScript service (product identity **MailSure**; env
 ```
 src/
   config/       Environment + defaults
-  validators/   Syntax, DNS, disposable, free-provider, provider classify, role, SMTP, Reacher (optional), catch-all, orchestrator
+  validators/   Syntax, DNS, disposable (+ multi-source sync), free-provider, provider classify, role, SMTP, Reacher (optional), catch-all, orchestrator
   database/     SQLite + versioned migrations
   processing/   Batch + CSV jobs
   mcp/          MCP server factory + tools + STDIO

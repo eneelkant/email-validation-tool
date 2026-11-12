@@ -14,7 +14,7 @@ MailSure MCP validates email addresses using local syntax checks, DNS/MX lookups
 | Unauthenticated remote MCP | Fail-closed: `OPENVERIFY_HTTP_AUTH_TOKEN` **required** when HTTP binds to a non-loopback address (`0.0.0.0`, LAN/public IP). Optional only for `127.0.0.1` / `::1` / `localhost`. Startup aborts before listen if misconfigured. |
 | Abuse / DoS | Request body limits, rate limiting, CSV size limits, concurrency caps |
 | PII leakage in logs | Emails redacted from logs by default (`OPENVERIFY_LOG_EMAILS=false`) |
-| SSRF via disposable update URL | HTTPS-only + hostname allowlist |
+| SSRF via disposable update URL | HTTPS-only + hostname allowlist (`raw.githubusercontent.com`, `cdn.jsdelivr.net`, `disposable.github.io`); `redirect: 'error'` (no follow); stream-enforced response size cap; bounded concurrency; sync is opt-in CLI/Action only |
 | Aggressive SMTP probing | Disabled by default; conservative timeouts; no mail sending |
 | Secrets in repo | `.env` gitignored; `.env.example` has empty token placeholders |
 
