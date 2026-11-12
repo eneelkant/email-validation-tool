@@ -14,7 +14,7 @@
 |------------|--------|
 | Syntax validation | RFC-aware, IDN/punycode, preserves original address |
 | DNS / MX / A / AAAA | Timeouts ≠ invalid |
-| Disposable detection | Local dataset (not fetched per request); optional fail-safe refresh |
+| Disposable detection | Local dataset (not fetched per request); optional multi-source fail-safe sync + daily automation PR |
 | Free provider detection | Curated list (gmail/outlook/yahoo/qq/…); never marked disposable |
 | Role-based locals | Configurable list (`admin@`, `info@`, …) |
 | Optional SMTP / catch-all | **Off by default**; never sends mail; no deliverability guarantee |
@@ -156,6 +156,7 @@ There is no invented cloud URL in this repo — leave `API_BASE_URL` empty until
 - [Security configuration](docs/security-config.md)
 - [Validation statuses](docs/validation-statuses.md)
 - [Validation limitations](docs/validation-limitations.md)
+- [Disposable domain sync](docs/disposable-domain-sync.md)
 - [Bulk CSV](docs/bulk-csv.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Security policy](SECURITY.md)

@@ -20,8 +20,9 @@ Full status table: [validation-statuses.md](./validation-statuses.md).
 - No proof of individual mailbox existence when SMTP is off (default).
 - Even with SMTP enabled: greylisting, tarpits, catch-alls, and anti-abuse policies make RCPT results inconclusive; status may be `unknown` / `temporary_error` / `risky`.
 - DNS timeouts and temporary resolver failures map to `temporary_error` — **never treat as invalid**.
-- Disposable list is a local snapshot; it can be stale until refreshed via `update_disposable_domains` / `npm run update:disposable` (optional GH Action). **Not** downloaded per validation request.
-- Free-provider list is curated first-party data (`data/free-email-providers.txt`); incomplete coverage means some consumer domains may be `custom` until added.
+- Disposable list is a local snapshot; it can be stale until refreshed via `update_disposable_domains` / `npm run update:disposable` (multi-source sync) or the daily `.github/workflows/update-disposable-domains.yml` automation PR. **Not** downloaded per validation request.
+- Multi-source refresh unions public blocklists (DED blocklist, disposable/disposable-email-domains txt/strict/json, mailchecker, ivolo exact+wildcard), subtracts DED allowlist (when available) and curated free providers, then atomically replaces the vendored file only if fail-safe size/shrink checks pass.
+- Free-provider list is curated first-party data (`data/free-email-providers.txt`); incomplete coverage means some consumer domains may be `custom` until added. Disposable sync **never** overwrites this file.
 - Catch-all detection is best-effort and disabled unless both catch-all **and** SMTP flags are enabled.
 
 ## SMTP policy

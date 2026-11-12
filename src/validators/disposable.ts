@@ -238,6 +238,7 @@ export async function updateDisposableDomainsFromUrl(
   const allowedHosts = new Set([
     'raw.githubusercontent.com',
     'cdn.jsdelivr.net',
+    'disposable.github.io',
   ]);
   const parsed = new URL(url);
   if (parsed.protocol !== 'https:') {

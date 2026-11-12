@@ -6,9 +6,11 @@ All notable changes to MailSure MCP will be documented in this file.
 
 ### Added
 
+- Daily multi-source disposable domain sync: unions DED blocklist (+ allowlist), disposable/disposable-email-domains (`domains` / strict / json), FGRibreau/mailchecker `list.txt`, and ivolo exact+wildcard JSON; parses/normalizes/validates; wildcards stored as apex for parent match; allowlist + free providers excluded; atomic publish with fail-safe min-count / shrink-ratio; never overwrites `free-email-providers.txt`; no per-request remote fetch
+- GitHub Action `.github/workflows/update-disposable-domains.yml` (daily + `workflow_dispatch`) opens an automation PR — does not push `main` and does not auto-merge
 - Disposable vs free email provider classification: `is_free_provider`, `provider_type` (`disposable` \| `free` \| `custom`) on ValidationResult / domain check / CSV / website UI / MCP; UI labels “Disposable email address” / “Free email provider”
 - Curated `data/free-email-providers.txt` + `OPENVERIFY_FREE_PROVIDERS_PATH` (gmail/outlook/hotmail/yahoo/qq and more); free providers are never marked disposable
-- Fail-safe disposable refresh (`npm run update:disposable` replace mode + optional `.github/workflows/refresh-disposable-domains.yml`); no per-request download
+- Fail-safe disposable refresh (`npm run update:disposable`); no per-request download
 - Optional remote Reacher SMTP provider (`REACHER_ENABLED` / `REACHER_API_URL` / `REACHER_TIMEOUT`): orchestrator calls separate `POST /v1/check_email` after DNS; maps `smtp.*` into MailSure statuses; never uses raw `is_reachable` as verdict; local SMTP remains fallback; failures/timeouts stay temporary/unknown (not false Invalid)
 - Reacher response parsing accepts nested `smtp.error` (and flat CoreError); sync calls use AbortController + Promise.race safe timeout (default 15s, max 60s)
 - Render Blueprint `render.yaml` for Web Service **mailsure-api** (Docker, health `/health`, website API + Pages CORS, free-tier **no persistent disk** / ephemeral `/data`, secrets via Render)
@@ -18,12 +20,14 @@ All notable changes to MailSure MCP will be documented in this file.
 - MailSure static website in `public/` (GitHub Pages) with verify UI, about, pricing, contact, privacy/terms drafts
 - Optional verify-only website API (`OPENVERIFY_WEBSITE_API_ENABLED`): `POST /api/verify`, `POST /api/verify/batch`
 - GitHub Actions workflow `deploy-pages.yml` for Pages deployment of `public/`
-- Docs: `docs/mailsure-website.md`
+- Docs: `docs/mailsure-website.md` / `docs/disposable-domain-sync.md`
 - Frontend ValidationResult shape checks; Compose/env wiring for website API + CORS + SQLite volume paths
 - Frontend/API tests for enable/disable, health, verify, batch, CORS, rate limits, invalid responses, CSV, duplicate banner
 
 ### Changed
 
+- `npm run update:disposable` defaults to multi-source sync (`--url` retains single-source replace/merge; `--dry-run` supported)
+- Replaced weekly `refresh-disposable-domains.yml` with daily `update-disposable-domains.yml`
 - User-facing product/MCP identity rebranded to **MailSure MCP** (`serverInfo.name` = `mailsure-mcp`; health `service` = `mailsure-api`)
 - `OPENVERIFY_*` env keys, API paths, DB filenames, npm package/bin, and import helpers kept for compatibility
 - Client example aliases renamed to `mailsure` (Cursor / Gemini / Claude)
