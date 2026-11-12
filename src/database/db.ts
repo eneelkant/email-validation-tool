@@ -5,7 +5,7 @@ import path from 'node:path';
 import { getConfig, isMemoryDbPath, isReadonlyDeployPath } from '../config/env.js';
 import type { DomainCheckResult, JobStatus, ValidationResult } from '../types/results.js';
 import { getLogger } from '../utils/logger.js';
-import { ensureProviderClassification } from '../validators/result-normalize.js';
+import { toPublicValidationResult } from '../validators/result-normalize.js';
 import { MIGRATIONS } from './migrations.js';
 
 const log = getLogger('db');
@@ -99,7 +99,7 @@ export function getCachedValidation(normalizedEmail: string): ValidationResult |
   if (!row) return null;
   try {
     // Rehydrate pre-classification-schema cache rows that omit free-provider fields.
-    return ensureProviderClassification(JSON.parse(row.result_json) as ValidationResult);
+    return toPublicValidationResult(JSON.parse(row.result_json) as ValidationResult);
   } catch {
     return null;
   }
@@ -108,6 +108,8 @@ export function getCachedValidation(normalizedEmail: string): ValidationResult |
 export function setCachedValidation(result: ValidationResult): void {
   const cfg = getConfig();
   if (cfg.cacheTtlSeconds === 0) return;
+  // Store the public contract so reloads never omit is_free_provider / provider_type.
+  const publicResult = toPublicValidationResult(result);
   const db = getDb();
   const expires = new Date(Date.now() + cfg.cacheTtlSeconds * 1000).toISOString();
   db.prepare(
@@ -119,11 +121,11 @@ export function setCachedValidation(result: ValidationResult): void {
        checked_at = excluded.checked_at,
        expires_at = excluded.expires_at`,
   ).run({
-    email_hash: emailHash(result.normalized_email),
-    normalized_email: result.normalized_email,
-    result_json: JSON.stringify(result),
-    overall_status: result.overall_status,
-    checked_at: result.checked_at,
+    email_hash: emailHash(publicResult.normalized_email),
+    normalized_email: publicResult.normalized_email,
+    result_json: JSON.stringify(publicResult),
+    overall_status: publicResult.overall_status,
+    checked_at: publicResult.checked_at,
     expires_at: expires,
   });
 }

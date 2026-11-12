@@ -1,4 +1,4 @@
-import type { ValidationResult } from '../types/results.js';
+import type { ProviderType, ValidationResult } from '../types/results.js';
 import { validateSyntax } from './syntax.js';
 import { classifyProvider } from './provider.js';
 
@@ -67,5 +67,38 @@ export function ensureProviderClassification(
     is_free_provider: provider.is_free_provider,
     provider_type: provider.provider_type,
     reason_codes: [...new Set(reason_codes)],
+  };
+}
+
+const PROVIDER_TYPES: ReadonlySet<string> = new Set(['disposable', 'free', 'custom']);
+
+/**
+ * Wire-format projection for API / MCP / CSV / cache writes.
+ * Always emits `is_free_provider` + `provider_type` keys:
+ * - syntax_valid → boolean + ProviderType (never omitted, never null)
+ * - invalid syntax → null + null
+ *
+ * JSON.stringify of the return value cannot drop these keys (no undefined).
+ */
+export function toPublicValidationResult(result: ValidationResult): ValidationResult {
+  const normalized = ensureProviderClassification(result);
+  if (!normalized.syntax_valid) {
+    return {
+      ...normalized,
+      is_disposable: normalized.is_disposable ?? null,
+      is_free_provider: null,
+      provider_type: null,
+    };
+  }
+
+  const provider_type: ProviderType = PROVIDER_TYPES.has(String(normalized.provider_type))
+    ? (normalized.provider_type as ProviderType)
+    : 'custom';
+
+  return {
+    ...normalized,
+    is_disposable: Boolean(normalized.is_disposable),
+    is_free_provider: Boolean(normalized.is_free_provider),
+    provider_type,
   };
 }

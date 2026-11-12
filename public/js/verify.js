@@ -68,6 +68,30 @@
         { code: "invalid_response" },
       );
     }
+    // Successful (syntax-valid) results must carry a boolean is_free_provider —
+    // never omit, never null. Invalid syntax may use null.
+    if (value.syntax_valid === true) {
+      if (typeof value.is_free_provider !== "boolean") {
+        throw Object.assign(
+          new Error(
+            "Invalid " + label + ": is_free_provider must be a boolean when syntax_valid.",
+          ),
+          { code: "invalid_response" },
+        );
+      }
+      if (
+        value.provider_type !== "disposable" &&
+        value.provider_type !== "free" &&
+        value.provider_type !== "custom"
+      ) {
+        throw Object.assign(
+          new Error(
+            "Invalid " + label + ": provider_type must be disposable|free|custom when syntax_valid.",
+          ),
+          { code: "invalid_response" },
+        );
+      }
+    }
     return value;
   }
 

@@ -39,6 +39,7 @@ import {
 import {
   ensureProviderClassification,
   missingProviderClassification,
+  toPublicValidationResult,
 } from '../src/validators/result-normalize.js';
 import { validateEmail } from '../src/validators/orchestrator.js';
 import type { DnsLookupResult } from '../src/validators/dns.js';
@@ -259,7 +260,7 @@ describe('website API serializes free-provider fields for majors', () => {
     closeDb();
   });
 
-  it('health advertises classification_schema 2 and free_providers > 0', async () => {
+  it('health advertises classification_schema 3 and free_providers > 0', async () => {
     const res = await fetch(`${base}/health`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
@@ -268,7 +269,7 @@ describe('website API serializes free-provider fields for majors', () => {
       db_status: string;
     };
     expect(body.db_status).toBe('ready');
-    expect(body.classification_schema).toBe(2);
+    expect(body.classification_schema).toBe(3);
     expect(typeof body.free_providers).toBe('number');
     expect(body.free_providers!).toBeGreaterThan(0);
   });
@@ -280,9 +281,13 @@ describe('website API serializes free-provider fields for majors', () => {
       body: JSON.stringify({ email: 'test@gmail.com' }),
     });
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { result: ValidationResult };
+    const rawText = await res.text();
+    const body = JSON.parse(rawText) as { result: ValidationResult };
+    // Raw JSON must include the key (live Enzonic currently omits it).
+    expect(rawText).toContain('"is_free_provider"');
     expect(body.result).toHaveProperty('is_free_provider');
     expect(body.result).toHaveProperty('provider_type');
+    expect(typeof body.result.is_free_provider).toBe('boolean');
     // Live DNS — only assert free when domain path succeeded.
     if (body.result.overall_status === 'valid_domain') {
       expect(body.result.is_free_provider).toBe(true);
@@ -304,6 +309,7 @@ describe('website API serializes free-provider fields for majors', () => {
     for (const r of body.results) {
       expect(r).toHaveProperty('is_free_provider');
       expect(r).toHaveProperty('provider_type');
+      expect(typeof r.is_free_provider).toBe('boolean');
       expect(r.is_free_provider).not.toBeUndefined();
       expect(r.provider_type).not.toBeUndefined();
       if (r.overall_status === 'valid_domain' || r.overall_status === 'risky') {
@@ -311,6 +317,89 @@ describe('website API serializes free-provider fields for majors', () => {
         expect(r.provider_type).toBe('free');
       }
     }
+  });
+
+  it('POST /api/verify custom domain emits boolean is_free_provider=false', async () => {
+    const res = await fetch(`${base}/api/verify`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'hello@example.com' }),
+    });
+    expect(res.status).toBe(200);
+    const rawText = await res.text();
+    expect(rawText).toContain('"is_free_provider"');
+    const body = JSON.parse(rawText) as { result: ValidationResult };
+    expect(typeof body.result.is_free_provider).toBe('boolean');
+    if (body.result.syntax_valid) {
+      expect(body.result.is_free_provider).toBe(false);
+      expect(body.result.provider_type).toBe('custom');
+    }
+  });
+});
+
+describe('toPublicValidationResult wire contract', () => {
+  beforeAll(() => {
+    process.env.OPENVERIFY_DB_PATH = ':memory:';
+    process.env.OPENVERIFY_CACHE_TTL_SECONDS = '3600';
+    process.env.OPENVERIFY_EPHEMERAL_STORAGE = 'true';
+    resetConfigCache();
+    loadConfig();
+    ensureFreeProvidersDatasetFile();
+    ensureDisposableDatasetFile();
+    resetFreeProvidersCache();
+    resetDisposableCache();
+    loadFreeProviders(true);
+    loadDisposableDomains(true);
+  });
+
+  it('JSON round-trip always includes boolean is_free_provider for legacy gmail', () => {
+    const publicResult = toPublicValidationResult(legacyGmailResult());
+    const raw = JSON.stringify(publicResult);
+    const parsed = JSON.parse(raw) as ValidationResult;
+    expect(raw).toContain('"is_free_provider":true');
+    expect(raw).toContain('"provider_type":"free"');
+    expect(typeof parsed.is_free_provider).toBe('boolean');
+    expect(parsed.is_free_provider).toBe(true);
+    expect(parsed.provider_type).toBe('free');
+  });
+
+  it('JSON round-trip emits boolean false for custom domain legacy shape', () => {
+    const legacy = {
+      ...legacyGmailResult(),
+      email: 'a@custom-domain.example',
+      normalized_email: 'a@custom-domain.example',
+    } as ValidationResult;
+    delete (legacy as { is_free_provider?: boolean }).is_free_provider;
+    delete (legacy as { provider_type?: string }).provider_type;
+    const publicResult = toPublicValidationResult(legacy);
+    const raw = JSON.stringify(publicResult);
+    expect(raw).toContain('"is_free_provider":false');
+    expect(raw).toContain('"provider_type":"custom"');
+    expect(publicResult.is_free_provider).toBe(false);
+  });
+
+  it('invalid syntax keeps null is_free_provider (key present)', () => {
+    const invalid: ValidationResult = {
+      email: 'not-an-email',
+      normalized_email: 'not-an-email',
+      syntax_valid: false,
+      domain_exists: null,
+      mx_exists: null,
+      is_disposable: null,
+      is_free_provider: null,
+      provider_type: null,
+      is_role_based: null,
+      smtp_status: 'not_checked',
+      catch_all_status: 'not_checked',
+      overall_status: 'invalid_syntax',
+      confidence: 'high',
+      reason_codes: ['INVALID_SYNTAX'],
+      checked_at: '2026-11-12T00:00:00.000Z',
+    };
+    const publicResult = toPublicValidationResult(invalid);
+    const raw = JSON.stringify(publicResult);
+    expect(raw).toContain('"is_free_provider":null');
+    expect(publicResult.is_free_provider).toBeNull();
   });
 });
 
@@ -340,6 +429,36 @@ describe('frontend rejects API payloads missing free-provider fields', () => {
       checked_at: '2026-11-12T00:00:00.000Z',
     };
     expect(() => api.assertValidationResult(incomplete, 'live')).toThrow(/is_free_provider/);
+  });
+
+  it('assertValidationResult rejects null is_free_provider when syntax_valid', () => {
+    const window = new Window({ url: 'https://eneelkant.github.io/' });
+    const root = path.resolve('.');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).MAILSURE_CONFIG = Object.freeze({ API_BASE_URL: 'https://example.test' });
+    window.eval(readFileSync(path.join(root, 'public/js/verify.js'), 'utf8'));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const api = (window as any).MailSureApi;
+    const nullFree = {
+      email: 'test@gmail.com',
+      normalized_email: 'test@gmail.com',
+      syntax_valid: true,
+      domain_exists: true,
+      mx_exists: true,
+      is_disposable: false,
+      is_free_provider: null,
+      provider_type: null,
+      is_role_based: false,
+      smtp_status: 'not_checked',
+      catch_all_status: 'not_checked',
+      overall_status: 'valid_domain',
+      confidence: 'medium',
+      reason_codes: [],
+      checked_at: '2026-11-12T00:00:00.000Z',
+    };
+    expect(() => api.assertValidationResult(nullFree, 'null-free')).toThrow(
+      /is_free_provider must be a boolean/,
+    );
   });
 
   it('resultsToCsv maps missing free fields to blank (documents live bug surface)', () => {
