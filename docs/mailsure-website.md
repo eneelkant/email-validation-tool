@@ -34,7 +34,7 @@ Until the workflow has succeeded on `main`, do not claim production Pages deploy
 Edit **`public/js/config.js`** → `API_BASE_URL`:
 
 ```js
-API_BASE_URL: "https://email-validation-tool-8d370a7d.enzonic.dev" // no trailing slash
+API_BASE_URL: "https://email-validation-tool.enzonic.dev" // no trailing slash
 ```
 
 | Value | Behavior |
@@ -43,7 +43,7 @@ API_BASE_URL: "https://email-validation-tool-8d370a7d.enzonic.dev" // no trailin
 | `"http://127.0.0.1:8787"` | Local end-to-end against `npm run start:http` with website API enabled |
 | `"https://…enzonic.dev"` / other self-hosted HTTPS origin | Production browser verify against that API |
 
-- Current Pages production points at the Enzonic website API origin above (CORS: `https://eneelkant.github.io`). Enzonic hostnames are **deployment-specific** — update `API_BASE_URL` if the backend redeploys under a new hostname.
+- Current Pages production points at the stable Enzonic website API origin above (CORS: `https://eneelkant.github.io`). Do **not** use ephemeral deploy hostnames (`*-8d370a7d`, `*-8121831f`); those can omit newer ValidationResult fields such as `is_free_provider`.
 - Set `API_BASE_URL` only to an origin you operate with the website API enabled and CORS allowlisted.
 - No secrets, bearer tokens, or fake API URLs in frontend source.
 - After changing `config.js` for Pages, merge to `main` so the Pages workflow publishes it.
@@ -134,7 +134,7 @@ OPENVERIFY_ALLOWED_HOSTS=localhost,127.0.0.1,<your-enzonic-api-host>
 # Platform PORT is used when set; if OPENVERIFY_HTTP_HOST is unset, bind is 0.0.0.0
 ```
 
-Set `public/js/config.js` → `API_BASE_URL` only after `GET /health` succeeds on the real Enzonic HTTPS origin (no trailing slash). The current Pages config already points at `https://email-validation-tool-8d370a7d.enzonic.dev`; update that value if the backend redeploys under a new hostname. Never invent unrelated deploy URLs.
+Set `public/js/config.js` → `API_BASE_URL` only after `GET /health` succeeds on the real Enzonic HTTPS origin (no trailing slash). The current Pages config points at the stable origin `https://email-validation-tool.enzonic.dev` (not ephemeral `*-8d370a7d` / `*-8121831f` hosts). Never invent unrelated deploy URLs.
 
 Then:
 

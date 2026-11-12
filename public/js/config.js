@@ -11,16 +11,17 @@
  *   Deployed API:    "https://api.example.com"  // only a real origin you operate
  *
  * Set only after GET /health succeeds on an origin you operate (website API + CORS).
- * Enzonic *.enzonic.dev hostnames are deployment-specific — update this value if
- * the backend redeploys under a new hostname. Leave empty only when no API is live;
- * the UI then shows a single clear "backend unavailable" banner and never invents results.
+ * Production Pages must use the stable Enzonic origin
+ * https://email-validation-tool.enzonic.dev — not ephemeral deploy ids such as
+ * *-8d370a7d or *-8121831f. Leave empty only when no API is live; the UI then
+ * shows a single clear "backend unavailable" banner and never invents results.
  *
  * Do not put secrets, bearer tokens, or fabricated API URLs here.
  * After changing this file for Pages, merge to main so deploy-pages.yml publishes it.
  */
 window.MAILSURE_CONFIG = Object.freeze({
   /** e.g. "https://api.example.com" or "http://127.0.0.1:8787" — no trailing slash */
-  API_BASE_URL: "https://email-validation-tool-8d370a7d.enzonic.dev",
+  API_BASE_URL: "https://email-validation-tool.enzonic.dev",
   MAX_CSV_BYTES: 2 * 1024 * 1024,
   MAX_BATCH_EMAILS: 50,
   PRODUCT: "MailSure",

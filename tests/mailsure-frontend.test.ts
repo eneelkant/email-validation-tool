@@ -187,11 +187,14 @@ describe('MailSure frontend CSV helpers', () => {
 });
 
 describe('MailSure published config.js', () => {
-  it('points Pages at the Enzonic website API without secrets or trailing slash', () => {
+  it('points Pages at the stable Enzonic website API without secrets or trailing slash', () => {
     const raw = readFileSync(path.join(process.cwd(), 'public/js/config.js'), 'utf8');
     expect(raw).toMatch(
-      /API_BASE_URL:\s*"https:\/\/email-validation-tool-8d370a7d\.enzonic\.dev"/,
+      /API_BASE_URL:\s*"https:\/\/email-validation-tool\.enzonic\.dev"/,
     );
+    // Reject ephemeral Enzonic deploy hostnames that omit newer ValidationResult fields.
+    expect(raw).not.toMatch(/email-validation-tool-8d370a7d\.enzonic\.dev/);
+    expect(raw).not.toMatch(/email-validation-tool-8121831f\.enzonic\.dev/);
     expect(raw).not.toMatch(/API_BASE_URL:\s*"https:\/\/[^"]+\/"/);
     // No env secrets or Authorization credentials in published frontend config.
     expect(raw).not.toMatch(/OPENVERIFY_HTTP_AUTH_TOKEN\s*=/);
@@ -199,7 +202,7 @@ describe('MailSure published config.js', () => {
     // Evaluate published config the same way the browser loads it.
     (0, eval)(raw);
     expect(window.MAILSURE_CONFIG.API_BASE_URL).toBe(
-      'https://email-validation-tool-8d370a7d.enzonic.dev',
+      'https://email-validation-tool.enzonic.dev',
     );
     expect(String(window.MAILSURE_CONFIG.API_BASE_URL).endsWith('/')).toBe(false);
   });
@@ -227,7 +230,7 @@ describe('MailSure API client', () => {
   });
 
   it('builds verify URLs from configured API_BASE_URL and parses live-shaped results', async () => {
-    const base = 'https://email-validation-tool-8d370a7d.enzonic.dev';
+    const base = 'https://email-validation-tool.enzonic.dev';
     window.MAILSURE_CONFIG = Object.freeze({ API_BASE_URL: base });
     loadBrowserScript('public/js/verify.js');
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
@@ -271,8 +274,80 @@ describe('MailSure API client', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('unwraps {result} envelope and keeps is_free_provider for syntax-valid rows', async () => {
+    const base = 'https://email-validation-tool.enzonic.dev';
+    window.MAILSURE_CONFIG = Object.freeze({ API_BASE_URL: base });
+    loadBrowserScript('public/js/verify.js');
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          result: {
+            email: 'user@gmail.com',
+            normalized_email: 'user@gmail.com',
+            syntax_valid: true,
+            domain_exists: true,
+            mx_exists: true,
+            is_disposable: false,
+            is_free_provider: true,
+            provider_type: 'free',
+            is_role_based: false,
+            smtp_status: 'not_checked',
+            catch_all_status: 'not_checked',
+            overall_status: 'valid_domain',
+            confidence: 'medium',
+            reason_codes: ['FREE_EMAIL_PROVIDER', 'SMTP_DISABLED'],
+            checked_at: '2026-11-12T00:00:00.000Z',
+          },
+        }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const result = (await window.MailSureApi.verifyEmail('user@gmail.com')) as {
+      is_free_provider: boolean;
+      provider_type: string;
+    };
+    expect(result.is_free_provider).toBe(true);
+    expect(result.provider_type).toBe('free');
+  });
+
+  it('rejects stale-host shaped verify payloads that omit is_free_provider', async () => {
+    const base = 'https://email-validation-tool.enzonic.dev';
+    window.MAILSURE_CONFIG = Object.freeze({ API_BASE_URL: base });
+    loadBrowserScript('public/js/verify.js');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            result: {
+              email: 'user@gmail.com',
+              normalized_email: 'user@gmail.com',
+              syntax_valid: true,
+              domain_exists: true,
+              mx_exists: true,
+              is_disposable: false,
+              // intentionally omit is_free_provider + provider_type (legacy host)
+              is_role_based: false,
+              smtp_status: 'not_checked',
+              catch_all_status: 'not_checked',
+              overall_status: 'valid_domain',
+              confidence: 'medium',
+              reason_codes: ['SMTP_DISABLED'],
+              checked_at: '2026-11-12T00:00:00.000Z',
+            },
+          }),
+      })),
+    );
+    await expect(window.MailSureApi.verifyEmail('user@gmail.com')).rejects.toThrow(
+      /is_free_provider/,
+    );
+  });
+
   it('posts CSV-derived emails to /api/verify/batch and returns typed results', async () => {
-    const base = 'https://email-validation-tool-8d370a7d.enzonic.dev';
+    const base = 'https://email-validation-tool.enzonic.dev';
     window.MAILSURE_CONFIG = Object.freeze({ API_BASE_URL: base });
     loadBrowserScript('public/js/verify.js');
     const fetchMock = vi.fn(async (url: string) => {

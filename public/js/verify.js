@@ -158,6 +158,14 @@
         status: res.status,
       });
     }
+    // Canonical website API envelope: { result: ValidationResult }. Do not treat a
+    // top-level ValidationResult as success, and do not invent missing fields.
+    if (!body || typeof body !== "object" || !("result" in body)) {
+      throw Object.assign(
+        new Error("Invalid verify response: expected JSON envelope { result: ValidationResult }."),
+        { code: "invalid_response" },
+      );
+    }
     return assertValidationResult(body.result, "verify response");
   }
 
@@ -187,6 +195,13 @@
         code: body.error || "http_error",
         status: res.status,
       });
+    }
+    // Canonical website API envelope: { results: ValidationResult[] }.
+    if (!body || typeof body !== "object" || !("results" in body)) {
+      throw Object.assign(
+        new Error("Invalid batch response: expected JSON envelope { results: ValidationResult[] }."),
+        { code: "invalid_response" },
+      );
     }
     if (!Array.isArray(body.results)) {
       throw Object.assign(
