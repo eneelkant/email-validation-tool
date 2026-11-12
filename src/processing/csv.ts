@@ -20,7 +20,7 @@ import { sanitizeCsvCell } from '../security/csv.js';
 import { sanitizeErrorMessage } from '../security/http-guards.js';
 import { verifyEmailsBatch } from './batch.js';
 import type { ValidationResult } from '../types/results.js';
-import { ensureProviderClassification } from '../validators/result-normalize.js';
+import { toPublicValidationResult } from '../validators/result-normalize.js';
 
 const log = getLogger('csv');
 
@@ -332,7 +332,7 @@ export async function processCsvJob(
           break;
         }
         // Normalize so stale/partial results never emit blank free-provider CSV cells.
-        const result = ensureProviderClassification(raw);
+        const result = toPublicValidationResult(raw);
         const row = batch[j]!;
         processed += 1;
         if (result.syntax_valid) succeeded += 1;

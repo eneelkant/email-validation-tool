@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { getConfig } from '../config/env.js';
 import { verifyEmailsBatch } from '../processing/batch.js';
 import { validateEmail } from '../validators/orchestrator.js';
-import { ensureProviderClassification } from '../validators/result-normalize.js';
+import { toPublicValidationResult } from '../validators/result-normalize.js';
 import { sanitizeErrorMessage } from '../security/http-guards.js';
 import { getLogger } from '../utils/logger.js';
 
@@ -60,7 +60,7 @@ export function createWebsiteApiRouter(): Router {
         jsonError(res, 400, 'invalid_request', 'Expected JSON body { "email": string }');
         return;
       }
-      const result = ensureProviderClassification(await validateEmail(parsed.data.email));
+      const result = toPublicValidationResult(await validateEmail(parsed.data.email));
       res.json({ result });
     } catch (err) {
       log.error({ err: sanitizeErrorMessage(err) }, 'verify failed');
@@ -89,7 +89,7 @@ export function createWebsiteApiRouter(): Router {
         await verifyEmailsBatch(parsed.data.emails, {
           concurrency: Math.min(getConfig().concurrency, 4),
         })
-      ).map(ensureProviderClassification);
+      ).map(toPublicValidationResult);
       res.json({ results, count: results.length });
     } catch (err) {
       log.error({ err: sanitizeErrorMessage(err) }, 'batch verify failed');

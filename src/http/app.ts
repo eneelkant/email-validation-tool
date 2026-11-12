@@ -123,7 +123,8 @@ export function createHttpApp(): Express {
       db_status: life.dbStatus,
       // Ops signal: 0/null after ready ⇒ free-provider dataset failed to load (blank CSV risk).
       free_providers: freeProvidersCount,
-      classification_schema: 2,
+      // 3 = public verify responses always emit boolean|null is_free_provider (wire contract).
+      classification_schema: 3,
     };
     if (status === 'degraded') {
       res.status(503).json(body);

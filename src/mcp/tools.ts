@@ -18,7 +18,7 @@ import {
   updateDisposableDomainsFromUrl,
 } from '../validators/disposable.js';
 import { getFreeProvidersMeta, loadFreeProviders } from '../validators/free-provider.js';
-import { ensureProviderClassification } from '../validators/result-normalize.js';
+import { toPublicValidationResult } from '../validators/result-normalize.js';
 import { checkDomain, validateEmail } from '../validators/orchestrator.js';
 import { getCachedValidation, setCachedValidation } from '../database/db.js';
 import { validateSyntax } from '../validators/syntax.js';
@@ -70,9 +70,11 @@ export function registerTools(server: McpServer): void {
         const syntax = validateSyntax(email);
         if (syntax.syntax_valid && !skip_cache) {
           const cached = getCachedValidation(syntax.normalized_email);
-          if (cached) return textResult({ ...cached, cached: true });
+          if (cached) {
+            return textResult({ ...toPublicValidationResult(cached), cached: true });
+          }
         }
-        const result = ensureProviderClassification(await validateEmail(email));
+        const result = toPublicValidationResult(await validateEmail(email));
         if (result.syntax_valid && result.overall_status !== 'temporary_error') {
           setCachedValidation(result);
         }
@@ -105,10 +107,12 @@ export function registerTools(server: McpServer): void {
         if (emails.length > cfg.maxBatchSize) {
           throw new Error(`Batch exceeds max size ${cfg.maxBatchSize}`);
         }
-        const results = await verifyEmailsBatch(emails, {
-          concurrency,
-          skipCache: skip_cache,
-        });
+        const results = (
+          await verifyEmailsBatch(emails, {
+            concurrency,
+            skipCache: skip_cache,
+          })
+        ).map(toPublicValidationResult);
         return textResult({ count: results.length, results });
       } catch (err) {
         return errorResult(err);
