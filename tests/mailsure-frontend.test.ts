@@ -513,9 +513,111 @@ describe('MailSure duplicate backend warning', () => {
   });
 });
 
+describe('MailSure healthy backend banner', () => {
+  const base = 'https://email-validation-tool.enzonic.dev';
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function mountWithConfig(): void {
+    mountVerifyDom();
+    window.MAILSURE_CONFIG = Object.freeze({
+      API_BASE_URL: base,
+      MAX_CSV_BYTES: 1024,
+      MAX_BATCH_EMAILS: 50,
+    });
+    loadBrowserScript('public/js/csv.js');
+    loadBrowserScript('public/js/verify.js');
+    loadBrowserScript('public/js/app.js');
+  }
+
+  async function flushBackendInit(): Promise<void> {
+    document.dispatchEvent(new Event('DOMContentLoaded'));
+    // initBackendBanner awaits checkHealth; flush microtasks + a macrotask.
+    await Promise.resolve();
+    await Promise.resolve();
+    await new Promise((r) => setTimeout(r, 0));
+  }
+
+  it('hides #backend-status when health succeeds and website_api is enabled', async () => {
+    mountWithConfig();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        expect(url).toBe(base + '/health');
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ status: 'ok', website_api: true }),
+        };
+      }),
+    );
+    await flushBackendInit();
+
+    const status = document.getElementById('backend-status');
+    expect(status?.hidden).toBe(true);
+    expect(status?.textContent).toBe('');
+    expect(status?.textContent).not.toMatch(/Connected to verification backend/i);
+    expect(window.__mailsureBackendState()).toEqual({ kind: 'ok' });
+  });
+
+  it('hides #backend-status when health succeeds and website_api is omitted', async () => {
+    mountWithConfig();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ status: 'ok' }),
+      })),
+    );
+    await flushBackendInit();
+
+    const status = document.getElementById('backend-status');
+    expect(status?.hidden).toBe(true);
+    expect(window.__mailsureBackendState()).toEqual({ kind: 'ok' });
+  });
+
+  it('still warns when website_api is disabled on a reachable backend', async () => {
+    mountWithConfig();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ status: 'ok', website_api: false }),
+      })),
+    );
+    await flushBackendInit();
+
+    const status = document.getElementById('backend-status');
+    expect(status?.hidden).toBe(false);
+    expect(status?.textContent).toMatch(/website API is disabled/i);
+    expect(window.__mailsureBackendState().kind).toBe('website_api_disabled');
+  });
+
+  it('still errors when the backend is unreachable', async () => {
+    mountWithConfig();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('network');
+      }),
+    );
+    await flushBackendInit();
+
+    const status = document.getElementById('backend-status');
+    expect(status?.hidden).toBe(false);
+    expect(status?.textContent).toMatch(/unreachable|cannot reach|not reachable/i);
+    expect(window.__mailsureBackendState().kind).toBe('unreachable');
+  });
+});
+
 declare global {
   interface Window {
     MAILSURE_CONFIG: Record<string, unknown>;
+    __mailsureBackendState: () => { kind: string; message?: string };
     MailSureApi: {
       isConfigured: () => boolean;
       checkHealth: () => Promise<{ ok: boolean; reason?: string; body?: unknown }>;

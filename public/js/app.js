@@ -2,7 +2,8 @@
  * MailSure page interactions: nav, tabs, single + bulk verify.
  *
  * Banner ownership (avoids duplicate warnings):
- * - #backend-status — persistent connection state (not configured / unreachable / disabled / connected)
+ * - #backend-status — persistent connection problems only (not configured / unreachable / disabled).
+ *   Healthy backends leave this banner hidden (no informational "connected" notice).
  * - #verify-feedback — form-only messages (empty input, CSV errors, API errors after a live backend,
  *   bulk success). Never repeats the same connection warning already shown in #backend-status.
  */
@@ -114,11 +115,9 @@
       return;
     }
 
-    setBackendStatus(
-      "ok",
-      "info",
-      "Connected to verification backend. Domain-level checks only — not mailbox existence proof.",
-    );
+    // Healthy + website API enabled: track ok state but do not show an informational banner.
+    backendState = { kind: "ok" };
+    hideBanner(banner);
   }
 
   function initSingleVerify() {
