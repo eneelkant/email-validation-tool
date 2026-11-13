@@ -1,4 +1,8 @@
+# MailSure GitHub Pages — https://eneelkant.github.io/email-validation-tool/
 User-agent: *
 Allow: /
+
+# Draft legal pages intentionally use meta robots noindex,follow.
+# They remain crawlable for link discovery but are not listed in the sitemap.
 
 Sitemap: https://eneelkant.github.io/email-validation-tool/sitemap.xml

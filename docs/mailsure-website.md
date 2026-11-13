@@ -183,6 +183,15 @@ The UI table mirrors `ValidationResult` in `src/types/results.ts`:
 - Copy states clearly: **no mailbox-existence claims**.
 - Privacy/Terms pages are **drafts marked for legal review**.
 
+## Analytics, SEO & Search Console (Pages frontend only)
+
+- **GTM container** `GTM-TNNBTBDM` is installed once on every `public/*.html` page (official head snippet + body noscript). It is **not** installed on the Enzonic API or Reacher.
+- **GA4** measurement ID `G-54Y7DESS9P` must be wired in the GTM workspace (Google Tag → All Pages). Do **not** hardcode a second gtag snippet. GA4 is **not** active until that GTM tag is published.
+- Custom `dataLayer` events (no emails/CSV/PII): `email_verification_started`, `email_verification_completed`, `bulk_csv_uploaded`, `bulk_verification_completed`, `csv_downloaded` via `public/js/analytics.js`.
+- This site is **multi-page static HTML** (not an SPA). GTM All Pages + GA4 enhanced measurement covers page views after dashboard config.
+- **SEO:** production canonicals under `https://eneelkant.github.io/email-validation-tool/`; `robots.txt` + `sitemap.xml` (indexable pages only); JSON-LD `WebSite` + `SoftwareApplication` on the home page.
+- **Search Console:** paste the HTML verification meta tag in `public/index.html` where the comment marker says (do not invent a token). Submit `https://eneelkant.github.io/email-validation-tool/sitemap.xml` after ownership is verified. Do not claim verification or indexing until Search Console confirms it.
+
 ## Manual checklist for operators
 
 1. Copy `.env.example` → `.env`; never commit secrets.

@@ -56,6 +56,16 @@
     el.textContent = "";
   }
 
+  /**
+   * Push a GTM dataLayer event without PII (emails, CSV contents, filenames).
+   * Safe no-op when analytics.js is absent.
+   */
+  function track(eventName, params) {
+    const analytics = window.MailSureAnalytics;
+    if (!analytics || typeof analytics.pushEvent !== "function") return;
+    analytics.pushEvent(eventName, params || {});
+  }
+
   function setBackendStatus(kind, type, message) {
     backendState = { kind: kind, message: message };
     showBanner($("#backend-status"), type, message);
@@ -157,11 +167,17 @@
           window.MailSureApi.renderResults(results, []);
           return;
         }
+        track("email_verification_started", { verification_mode: "single" });
         const result = await window.MailSureApi.verifyEmail(email);
         lastResults = [result];
         window.MailSureApi.renderResults(results, lastResults);
         if (downloadBtn) downloadBtn.hidden = false;
         hideBanner(banner);
+        track("email_verification_completed", {
+          verification_mode: "single",
+          overall_status: result && result.overall_status ? String(result.overall_status) : "unknown",
+          confidence: result && result.confidence ? String(result.confidence) : "unknown",
+        });
       } catch (err) {
         lastResults = [];
         window.MailSureApi.renderResults(results, []);
@@ -182,6 +198,7 @@
         if (!lastResults.length) return;
         const csv = window.MailSureCsv.resultsToCsv(lastResults);
         window.MailSureCsv.downloadText("mailsure-results.csv", csv);
+        track("csv_downloaded", { download_kind: "results", result_count: lastResults.length });
       });
     }
 
@@ -229,6 +246,12 @@
     try {
       window.MailSureCsv.assertCsvFile(file);
       setCsvFileError("");
+      // Filename omitted intentionally — may contain PII.
+      track("bulk_csv_uploaded", {
+        verification_mode: "bulk",
+        file_extension: "csv",
+        file_size_bytes: typeof file.size === "number" ? file.size : 0,
+      });
     } catch (err) {
       setCsvFileError(err.message || "Unsupported file type. Please upload a .csv file.");
     }
@@ -249,6 +272,7 @@
     if (sampleBtn) {
       sampleBtn.addEventListener("click", () => {
         window.MailSureCsv.downloadSampleCsv();
+        track("csv_downloaded", { download_kind: "sample" });
       });
     }
 
@@ -263,6 +287,12 @@
         try {
           window.MailSureCsv.assertCsvFile(file);
           setCsvFileError("");
+          // Filename omitted intentionally — may contain PII.
+          track("bulk_csv_uploaded", {
+            verification_mode: "bulk",
+            file_extension: "csv",
+            file_size_bytes: typeof file.size === "number" ? file.size : 0,
+          });
         } catch (err) {
           setCsvFileError(err.message || "Unsupported file type. Please upload a .csv file.");
         }
@@ -333,6 +363,10 @@
           window.MailSureApi.renderResults(results, []);
           return;
         }
+        track("email_verification_started", {
+          verification_mode: "bulk",
+          email_count: emails.length,
+        });
         const batch = await window.MailSureApi.verifyBatch(emails);
         window.MailSureApi.renderResults(results, batch);
         if (singleForm && singleForm._setLastResults) singleForm._setLastResults(batch);
@@ -342,6 +376,10 @@
           "info",
           "Verified " + batch.length + " unique email(s) from CSV. Formula-like cells are sanitized on download.",
         );
+        track("bulk_verification_completed", {
+          verification_mode: "bulk",
+          result_count: batch.length,
+        });
       } catch (err) {
         window.MailSureApi.renderResults(results, []);
         if (downloadBtn) downloadBtn.hidden = true;

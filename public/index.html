@@ -3,12 +3,26 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Google Tag Manager -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-TNNBTBDM');</script>
+    <!-- End Google Tag Manager -->
     <title>MailSure — Email Verification Made Simple</title>
     <meta
       name="description"
       content="MailSure helps you verify email syntax, domains, MX records, and disposable addresses. Free, open-source, self-hosted. No mailbox-existence claims."
     />
     <meta name="theme-color" content="#0b1220" />
+    <meta name="robots" content="index,follow" />
+    <!--
+      Google Search Console HTML-tag verification:
+      Paste the meta tag from Search Console on the next line inside this <head>, e.g.:
+      <meta name="google-site-verification" content="PASTE_TOKEN_FROM_SEARCH_CONSOLE" />
+      Do not invent a token. Verification is incomplete until Search Console confirms ownership.
+    -->
     <link rel="canonical" href="https://eneelkant.github.io/email-validation-tool/" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="MailSure" />
@@ -19,6 +33,7 @@
     />
     <meta property="og:url" content="https://eneelkant.github.io/email-validation-tool/" />
     <meta property="og:image" content="https://eneelkant.github.io/email-validation-tool/favicon.svg" />
+    <meta property="og:image:alt" content="MailSure logo — envelope with verification mark" />
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="MailSure — Email Verification Made Simple" />
     <meta
@@ -33,8 +48,39 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="css/styles.css" />
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "name": "MailSure",
+          "url": "https://eneelkant.github.io/email-validation-tool/",
+          "description": "MailSure helps you verify email syntax, domains, MX records, and disposable addresses. Free, open-source, self-hosted.",
+          "inLanguage": "en"
+        },
+        {
+          "@type": "SoftwareApplication",
+          "name": "MailSure",
+          "applicationCategory": "BusinessApplication",
+          "operatingSystem": "Web",
+          "url": "https://eneelkant.github.io/email-validation-tool/",
+          "description": "Professional email verification for lists and forms. Domain-level checks powered by OpenVerify MCP. No mailbox-existence claims.",
+          "isAccessibleForFree": true,
+          "license": "https://github.com/eneelkant/email-validation-tool/blob/main/LICENSE",
+          "sameAs": [
+            "https://github.com/eneelkant/email-validation-tool"
+          ]
+        }
+      ]
+    }
+    </script>
   </head>
   <body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-TNNBTBDM"
+height="0" width="0" style="display:none;visibility:hidden" title="Google Tag Manager"></iframe></noscript>
+    <!-- End Google Tag Manager (noscript) -->
     <a class="skip-link" href="#main">Skip to content</a>
     <header class="site-header">
       <div class="container nav">
@@ -65,7 +111,7 @@
     <main id="main">
       <section class="hero" aria-labelledby="hero-heading">
         <div class="container">
-          <p class="hero-brand" id="hero-heading">MailSure</p>
+          <h1 class="hero-brand" id="hero-heading">MailSure</h1>
           <p class="hero-tagline">Email Verification Made Simple.</p>
           <p class="hero-lead">
             Check syntax, domain DNS/MX, disposable domains, and role-based addresses —
@@ -398,6 +444,7 @@ support@example.org</code></pre>
     </footer>
 
     <script src="js/config.js" defer></script>
+    <script src="js/analytics.js" defer></script>
     <script src="js/csv.js" defer></script>
     <script src="js/verify.js" defer></script>
     <script src="js/app.js" defer></script>
