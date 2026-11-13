@@ -1,169 +1,358 @@
-# MailSure MCP
+# MailSure — Free Online Email Validation & MCP
 
-**Free, open-source, self-hosted email verification** for local validation, bounded bulk CSV processing, DNS/MX checks, and disposable-email detection — without paid API credits.
+**MailSure** helps you check email addresses before you send campaigns, clean lists, or build AI workflows.
 
-**MailSure** (*Email Verification Made Simple.*) is the product name for the website, MCP server, and optional verify API. The npm package/bin and `OPENVERIFY_*` environment variable names are kept for compatibility with existing configs.
+It looks at **syntax**, **domain DNS/MX**, **disposable domains**, **free providers**, and **role-based** addresses (like `admin@` / `info@`). Results are structured and honest: a “valid domain” means the domain looks mail-capable — **not** that a specific inbox exists or that you own the address.
 
-> Repository: [eneelkant/email-validation-tool](https://github.com/eneelkant/email-validation-tool)  
-> Website: [eneelkant.github.io/email-validation-tool](https://eneelkant.github.io/email-validation-tool/) (after Pages workflow succeeds on `main`)  
-> License: GPL-3.0
+| | |
+|---|---|
+| **Live site** | [eneelkant.github.io/email-validation-tool](https://eneelkant.github.io/email-validation-tool/) |
+| **Source** | [github.com/eneelkant/email-validation-tool](https://github.com/eneelkant/email-validation-tool) |
+| **License** | [GPL-3.0](LICENSE) |
+| **Architecture map** | [gitdiagram.com/eneelkant/email-validation-tool](https://gitdiagram.com/eneelkant/email-validation-tool) |
 
-## What it does
+Open-source and free to use. Env variable names still start with `OPENVERIFY_*` for compatibility; the product name is **MailSure**.
 
-| Capability | Notes |
-|------------|--------|
-| Syntax validation | RFC-aware, IDN/punycode, preserves original address |
-| DNS / MX / A / AAAA | Timeouts ≠ invalid |
-| Disposable detection | Local dataset (not fetched per request); optional multi-source fail-safe sync + daily automation PR |
-| Free provider detection | Curated list (gmail/outlook/yahoo/qq/…); never marked disposable |
-| Role-based locals | Configurable list (`admin@`, `info@`, …) |
-| Optional SMTP / catch-all | **Off by default**; never sends mail; no deliverability guarantee |
-| Caching + jobs | SQLite |
-| Bulk CSV | Bounded-memory streaming batches, concurrent, cancellable (size-capped) |
-| MCP tools | 9 tools over STDIO + Streamable HTTP |
+---
 
-**Important:** `valid_domain` means the domain looks mail-capable. It does **not** mean the individual mailbox was confirmed.
+## Try online free
 
-## Requirements
+**Website:** [https://eneelkant.github.io/email-validation-tool/](https://eneelkant.github.io/email-validation-tool/)
 
-- Node.js **22+**
-- Optional: Docker
-- Optional: [Render](docs/render-deploy.md) for hosting `mailsure-api`
+### Steps
 
-## Quick start (STDIO)
+1. Open the live site link above.
+2. Paste a single email, or upload a small CSV (browser bulk is capped in the UI — currently **50 unique emails** and **2 MiB** per file).
+3. Review the structured result (status, confidence, reason codes, disposable / free-provider flags, and more).
+4. Download results CSV when you use bulk.
+
+No account is required on the public site. This project does **not** publish invented daily quotas. Hosting capacity and rate limits can vary with whoever runs the backend; if verify is unavailable, the site shows a clear banner and **never invents** results.
+
+### Important disclaimer
+
+MailSure does **not** prove:
+
+- that mail will land in an inbox, or
+- that you (or anyone) **own** the address.
+
+Use it for list hygiene and risk signals — not as legal or deliverability proof.
+
+---
+
+## What can MailSure do?
+
+Verified capabilities from this repository:
+
+- **Syntax checks** — RFC-aware, including internationalized domains (IDN/punycode)
+- **DNS / MX / A / AAAA** — domain looks mail-capable; timeouts are temporary, not “invalid”
+- **Disposable detection** — local dataset (not downloaded on every request)
+- **Free-provider detection** — curated list (Gmail, Outlook, Yahoo, …); free providers are never marked disposable
+- **Role-based locals** — e.g. `admin@`, `info@` (configurable)
+- **Bulk CSV** — browser batches on the site; larger streaming jobs via MCP `verify_csv`
+- **MCP tools** — 9 tools over local STDIO and remote Streamable HTTP (`POST /mcp`)
+- **Optional website API** — `POST /api/verify` and `POST /api/verify/batch` when enabled
+- **Optional SMTP / catch-all** — **off by default**; never sends mail; does **not** always confirm a mailbox even when enabled
+
+What it does **not** claim: “SMTP always confirms the inbox,” paid API credits, or ownership of an address.
+
+---
+
+## How MCP works
+
+[MCP](https://modelcontextprotocol.io/) (Model Context Protocol) lets an AI assistant call MailSure tools instead of guessing about emails.
+
+```mermaid
+flowchart LR
+  U[You] --> A[AI assistant]
+  A --> M[MailSure MCP]
+  M --> V[Validation engine]
+  V --> R[Structured result]
+  R --> A
+  A --> U
+```
+
+1. You ask your AI to check an email or list.
+2. The AI calls a MailSure MCP tool (for example `verify_email`).
+3. MailSure runs the same validation engine used by the website API.
+4. A structured JSON result comes back for the AI to explain.
+
+### Deeper picture (optional)
+
+Interfaces → validation → storage, as implemented in this repo (also visualized on [GitDiagram](https://gitdiagram.com/eneelkant/email-validation-tool)):
+
+- **Interfaces:** MCP (STDIO / Streamable HTTP), optional website API, static Pages UI
+- **Validation:** syntax → DNS → disposable / free-provider / role → optional SMTP/catch-all
+- **Jobs:** batch + streaming CSV with SQLite caches and job status
+
+Full layout: [docs/architecture.md](docs/architecture.md).
+
+---
+
+## Connect to AI
+
+MailSure speaks MCP. Point a compatible client at a **local** STDIO process, or at a **remote** HTTPS `…/mcp` endpoint you operate (with a strong bearer token).
+
+> Client UIs change often. Configs below match **this repo’s examples** plus **current official docs**. Always re-check the linked docs if a UI label moved. Do not invent OAuth URLs, API keys, or hosted MCP endpoints that are not yours.
+
+After cloning, build once so `dist/index.js` exists:
 
 ```bash
+npm install
+npm run build
+```
+
+### Cursor
+
+**Verified:** project file [`.cursor/mcp.json`](.cursor/mcp.json) (server alias `mailsure`). Official docs: [Cursor MCP](https://cursor.com/docs/mcp).
+
+1. Open this repo in Cursor (or copy the config into `~/.cursor/mcp.json` for all projects).
+2. Prefer an absolute path if Cursor’s working directory is not the repo root.
+3. Restart Cursor / reload MCP, then ask Agent to verify an email.
+
+Copy-ready (from the repo example):
+
+```json
+{
+  "mcpServers": {
+    "mailsure": {
+      "command": "node",
+      "args": ["dist/index.js", "--transport", "stdio"],
+      "env": {
+        "OPENVERIFY_TRANSPORT": "stdio",
+        "OPENVERIFY_LOG_LEVEL": "info",
+        "OPENVERIFY_SMTP_ENABLED": "false"
+      }
+    }
+  }
+}
+```
+
+Remote HTTP is also supported in Cursor via a `url` entry (and optional `headers`) — use your real `https://…/mcp` origin only.
+
+### Gemini
+
+#### Gemini CLI (verified in-repo)
+
+**Verified:** [`.gemini/settings.json`](.gemini/settings.json). Official docs: [Gemini CLI MCP servers](https://geminicli.com/docs/tools/mcp-server/).
+
+```json
+{
+  "mcpServers": {
+    "mailsure": {
+      "command": "node",
+      "args": ["dist/index.js", "--transport", "stdio"],
+      "env": {
+        "OPENVERIFY_TRANSPORT": "stdio",
+        "OPENVERIFY_LOG_LEVEL": "info",
+        "OPENVERIFY_SMTP_ENABLED": "false"
+      }
+    }
+  }
+}
+```
+
+Run Gemini CLI from the project directory (or set absolute paths / `cwd` so `dist/index.js` resolves).
+
+#### Gemini Apps (gemini.google.com)
+
+Google documents **custom Connected Apps** that accept an MCP server **URL** for eligible users (personal Google Account, 18+, US, English, Keep Activity on). Official help: [Connect & manage custom apps for Gemini Apps](https://support.google.com/gemini/answer/17209137).
+
+- Requires a **public HTTPS** MailSure MCP endpoint you operate (`…/mcp`), not the local STDIO command above.
+- If the Connected Apps UI is missing for your account/region, use **Gemini CLI** instead — that path is what this repo ships and tests against.
+
+### ChatGPT
+
+ChatGPT has **two different** surfaces. Do not mix them up.
+
+#### 1) ChatGPT conversation (Plugins / custom MCP)
+
+OpenAI documents adding a **custom MCP server as a plugin** in ChatGPT on the web: [Add custom MCP server](https://developers.openai.com/api/docs/guides/custom-mcp-server).
+
+High-level steps (labels may vary):
+
+1. Host MailSure over **HTTPS** with Streamable HTTP (`POST /mcp`). See [`examples/chatgpt-remote.md`](examples/chatgpt-remote.md).
+2. In ChatGPT → Plugins → **Add custom MCP server**.
+3. Enter your real Server URL, e.g. `https://YOUR-HOST/mcp` (never invent a host).
+4. Configure authentication per OpenAI’s current options (OAuth / none / mixed). MailSure’s non-loopback HTTP transport **requires** `OPENVERIFY_HTTP_AUTH_TOKEN` (Bearer). Use whatever auth/header fields the ChatGPT UI exposes for fixed credentials; if the UI cannot send a Bearer token to your server, use the **developer** path below or keep the endpoint private.
+
+This path is **remote MCP only** — ChatGPT conversation plugins do not start your local `node dist/index.js` STDIO process.
+
+#### 2) ChatGPT developer connectors (Responses API)
+
+For apps you build, OpenAI’s Responses API can call a remote MCP server with `type: "mcp"` and `server_url` (or a Secure MCP Tunnel). Official guide: [MCP servers (tools / connectors)](https://developers.openai.com/api/docs/guides/tools-connectors-mcp).
+
+Illustrative shape (replace with **your** HTTPS origin and token; do not invent hosts):
+
+```bash
+curl https://api.openai.com/v1/responses \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $OPENAI_API_KEY" \
+  -d '{
+    "model": "gpt-5.2",
+    "tools": [
+      {
+        "type": "mcp",
+        "server_label": "mailsure",
+        "server_description": "MailSure email validation MCP",
+        "server_url": "https://YOUR-HOST/mcp",
+        "headers": {
+          "Authorization": "Bearer YOUR_OPENVERIFY_HTTP_AUTH_TOKEN"
+        },
+        "require_approval": "always"
+      }
+    ],
+    "input": "Use MailSure verify_email on alice@example.com and summarize overall_status."
+  }'
+```
+
+Use a model ID your OpenAI account actually supports. Prefer `require_approval` until you trust the deployment.
+
+### Claude
+
+#### Claude Desktop (local STDIO) — verified in-repo
+
+**Verified example:** [`examples/claude-desktop-config.json`](examples/claude-desktop-config.json). Official help: [Local MCP on Claude Desktop](https://support.claude.com/en/articles/10949351-getting-started-with-local-mcp-servers-on-claude-desktop).
+
+1. Build the project (`npm run build`).
+2. Claude Desktop → **Settings → Developer → Edit Config** (`claude_desktop_config.json`).
+3. Merge the `mailsure` server block; replace the path with your absolute clone path.
+4. Fully quit and reopen Claude Desktop.
+
+```json
+{
+  "mcpServers": {
+    "mailsure": {
+      "command": "node",
+      "args": [
+        "/ABSOLUTE/PATH/TO/email-validation-tool/dist/index.js",
+        "--transport",
+        "stdio"
+      ],
+      "env": {
+        "OPENVERIFY_TRANSPORT": "stdio",
+        "OPENVERIFY_LOG_LEVEL": "info",
+        "OPENVERIFY_SMTP_ENABLED": "false"
+      }
+    }
+  }
+}
+```
+
+#### Claude on the web (claude.ai) — remote connectors only
+
+claude.ai does **not** run local STDIO MCP the way Desktop does. Use a **custom remote connector** with a public HTTPS MCP URL. Official help: [Custom connectors using remote MCP](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp).
+
+1. Deploy MailSure HTTP behind HTTPS with a bearer token.
+2. Customize → Connectors → **Add custom connector**.
+3. Paste `https://YOUR-HOST/mcp`.
+4. Under **Request headers**, add your Bearer token if you are not using OAuth (MailSure uses fixed Bearer auth, not a MailSure OAuth login).
+
+Remote connectors are reached from Anthropic’s cloud — private/VPN-only hosts will not work without network allowlisting.
+
+---
+
+## Example prompts
+
+These match the **real** MCP tool names registered in [`src/mcp/tools.ts`](src/mcp/tools.ts):
+
+| Goal | Example prompt |
+|------|----------------|
+| Single address | `Use MailSure verify_email on alice@example.com and explain overall_status and reason_codes.` |
+| Small list | `Call verify_emails_batch on alice@example.com, bob@tempmail.example, and info@acme.com. Summarize disposable vs free-provider vs role-based.` |
+| Domain only | `Use check_domain on example.com and tell me if MX looks mail-capable.` |
+| CSV job | `Start verify_csv on ./data/my-list.csv with wait false, then poll get_validation_job until it finishes.` |
+| Cancel | `Cancel the validation job with cancel_validation_job and job_id <uuid>.` |
+| Stats | `Call get_statistics and summarize cache and disposable list metadata.` |
+| Hygiene | `Clear the validation cache with clear_cache, then re-check the same email with skip_cache true.` |
+
+Remember: even a clean `valid_domain` result is **not** inbox or ownership proof.
+
+---
+
+## Install / self-host (short)
+
+**Requirements:** Node.js **22+**. Optional: Docker.
+
+### Local MCP (STDIO)
+
+```bash
+git clone https://github.com/eneelkant/email-validation-tool.git
+cd email-validation-tool
 npm install
 npm run build
 node dist/index.js --transport stdio
 ```
 
-Point your MCP client at that command (see [Client setup](#client-setup)). MCP `serverInfo.name` is `mailsure-mcp`.
+Equivalent scripts: `npm run start:stdio`.
 
-## Quick start (HTTP)
+### Local HTTP (MCP + optional website API)
 
 ```bash
 cp .env.example .env
-# Loopback (default OPENVERIFY_HTTP_HOST=127.0.0.1): token optional
-# Non-loopback (e.g. 0.0.0.0): OPENVERIFY_HTTP_AUTH_TOKEN is mandatory or startup fails
+# Loopback (default): token optional
+# Non-loopback (0.0.0.0): OPENVERIFY_HTTP_AUTH_TOKEN is mandatory
 npm run build
 node dist/index.js --transport http
 ```
 
-Endpoints:
+Useful endpoints when HTTP is up:
 
-- MCP: `POST /mcp` (Streamable HTTP) — Bearer auth when token configured / required
-- `GET /health`, `GET /ready`, `GET /version` — liveness only; no secrets (`service: mailsure-api`, product MailSure MCP)
-- Optional website API: `POST /api/verify`, `POST /api/verify/batch` (when enabled)
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /mcp` | Streamable HTTP MCP |
+| `GET /health`, `/ready`, `/version` | Liveness (no secrets) |
+| `POST /api/verify`, `POST /api/verify/batch` | Website API (only if `OPENVERIFY_WEBSITE_API_ENABLED=true`) |
 
-Remote exposure also needs **HTTPS** (Render or a reverse proxy) and a strong token. Cloud hosts that inject `PORT` are supported; `OPENVERIFY_HTTP_PORT` remains the local/Docker default.
-
-## Docker
+### Docker
 
 ```bash
-# Required: set a token (Compose fails if OPENVERIFY_HTTP_AUTH_TOKEN is unset)
 echo 'OPENVERIFY_HTTP_AUTH_TOKEN=change-me-to-a-long-random-value' >> .env
 docker compose up --build
 ```
 
-Data persists in the `openverify-data` volume. Do not bake secrets into the image. Image/compose are provided for deployment convenience; treat remote use as requiring auth + TLS review.
+Compose fails closed if the token is missing (container binds `0.0.0.0`).
 
-## Render (mailsure-api)
+### Render / operator hosting
 
-Blueprint: [`render.yaml`](render.yaml). Operator steps: [docs/render-deploy.md](docs/render-deploy.md).
+Blueprint: [`render.yaml`](render.yaml). Steps: [docs/render-deploy.md](docs/render-deploy.md). Use only the HTTPS origin your host assigns — never invent one.
 
-- Web service name: **mailsure-api** (Docker, branch `main`, health `/health`)
-- Enables website API + CORS for `https://eneelkant.github.io`
-- Generates `OPENVERIFY_HTTP_AUTH_TOKEN`; you must set `OPENVERIFY_ALLOWED_HOSTS` to include the real Render hostname
-- **Free-tier / no disk:** SQLite retained for in-process caches + MCP CSV jobs under ephemeral `/data` (`OPENVERIFY_EPHEMERAL_STORAGE=true`; wiped on redeploy). Optional `OPENVERIFY_DB_PATH=:memory:`. Website bulk CSV remains client-side.
-- **Enzonic / Lambda (`/var/task`):** with `OPENVERIFY_EPHEMERAL_STORAGE=true`, paths under the read-only package root remap to `os.tmpdir()` (no `mkdir` under `/var/task`). See [docs/mailsure-website.md](docs/mailsure-website.md#enzonic-deploy-website-api--cors).
+More detail: [docs/mcp-client-setup.md](docs/mcp-client-setup.md), [docs/mailsure-website.md](docs/mailsure-website.md).
 
-**Do not invent a Render/Enzonic URL.** Leave [`public/js/config.js`](public/js/config.js) `API_BASE_URL` empty until you have confirmed `GET /health` on the HTTPS origin your host assigns. This repository does not claim a live backend deploy.
+---
 
-## MCP tools
+## Privacy & limitations
 
-1. `verify_email`
-2. `verify_emails_batch`
-3. `verify_csv`
-4. `check_domain`
-5. `get_validation_job`
-6. `cancel_validation_job`
-7. `get_statistics`
-8. `clear_cache`
-9. `update_disposable_domains`
+Accurate to this implementation:
 
-## Client setup
+- **No paid verification APIs** are required for core checks.
+- **No outbound email** is sent. Optional SMTP probes (off by default) use RCPT-style checks only when enabled.
+- **Emails are redacted in logs by default** (`OPENVERIFY_LOG_EMAILS=false`).
+- **CSV jobs** stay on paths you configure; website bulk CSV is parsed in the browser and sent as email batches to the verify API — admin MCP tools are **not** exposed on the public website API.
+- **Disposable list** is a local snapshot; refresh via `update_disposable_domains` / `npm run update:disposable` or the daily automation PR — not fetched per validation.
+- **SQLite** caches and job metadata may be ephemeral on free-tier / serverless hosts.
+- **`valid_domain` ≠ mailbox verified.** DNS timeouts → temporary error, not invalid.
+- Even with SMTP or optional Reacher enabled, greylisting, catch-alls, and anti-abuse policies can make results inconclusive.
 
-Examples ship in-repo. **Tested in this project’s CI/unit suite for transports and health/auth;** end-to-end verification inside each proprietary client UI depends on your local install and that client’s current MCP support — do not assume automatic compatibility.
+Full notes: [docs/validation-limitations.md](docs/validation-limitations.md), [SECURITY.md](SECURITY.md).
 
-| Client | Config |
-|--------|--------|
-| Cursor | [`.cursor/mcp.json`](.cursor/mcp.json) (server alias `mailsure`) |
-| Gemini CLI | [`.gemini/settings.json`](.gemini/settings.json) (server alias `mailsure`) |
-| Claude Desktop / Code | [`examples/claude-desktop-config.json`](examples/claude-desktop-config.json) |
-| ChatGPT (remote) | [`examples/chatgpt-remote.md`](examples/chatgpt-remote.md) |
+---
 
-After `npm run build`, Cursor/Gemini can use:
+## Links & contribution
 
-```json
-{
-  "command": "node",
-  "args": ["dist/index.js", "--transport", "stdio"]
-}
-```
+| Resource | Link |
+|----------|------|
+| Live site | https://eneelkant.github.io/email-validation-tool/ |
+| Repository | https://github.com/eneelkant/email-validation-tool |
+| Architecture diagram | https://gitdiagram.com/eneelkant/email-validation-tool |
+| MCP client setup | [docs/mcp-client-setup.md](docs/mcp-client-setup.md) |
+| Validation statuses | [docs/validation-statuses.md](docs/validation-statuses.md) |
+| Validation limitations | [docs/validation-limitations.md](docs/validation-limitations.md) |
+| Security policy | [SECURITY.md](SECURITY.md) |
+| Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| Changelog | [CHANGELOG.md](CHANGELOG.md) |
+| License | [LICENSE](LICENSE) (GPL-3.0) |
 
-(Use an absolute path in Claude Desktop.)
-
-## Configuration
-
-See [`.env.example`](.env.example). Key variables (names keep the `OPENVERIFY_` prefix for compatibility):
-
-- `OPENVERIFY_TRANSPORT` — `stdio` \| `http` \| `both` (STDIO needs no HTTP token)
-- `OPENVERIFY_HTTP_HOST` — default `127.0.0.1` (loopback); `0.0.0.0` requires auth token
-- `OPENVERIFY_HTTP_PORT` — local/Docker listen port (default `8787`); overridden by platform `PORT` when set (e.g. Render)
-- `OPENVERIFY_HTTP_AUTH_TOKEN` — Bearer for MCP; required for non-loopback HTTP
-- `OPENVERIFY_CSV_BATCH_SIZE` — streaming batch size (default 100, cap 1000)
-- `OPENVERIFY_MAX_CSV_BYTES` — max CSV bytes accepted (default 100 MiB)
-- `OPENVERIFY_CONCURRENCY` — validation concurrency
-- `OPENVERIFY_SMTP_ENABLED` — default `false`
-- `OPENVERIFY_LOG_EMAILS` — default `false` (redact emails in logs)
-- `OPENVERIFY_WEBSITE_API_ENABLED` — default `false`; verify-only REST for MailSure Pages
-
-CSV jobs stream in bounded batches (read → parse → batch → validate → ordered write), support cancellation, preserve row order/columns, and sanitize formula-like cells. Cancellation stops new batches, flushes completed output, and marks the job `cancelled`.
-
-## MailSure website (GitHub Pages)
-
-Static site sources live in [`public/`](public/). Workflow: [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml).
-
-1. Repo **Settings → Pages → Source: GitHub Actions**
-2. Merge to `main` (or run the workflow manually after merge)
-3. Confirm the **Deploy MailSure Pages** Action is green before treating the site as live
-
-By default the Pages build has an empty `API_BASE_URL` in [`public/js/config.js`](public/js/config.js) — the UI shows a **single** backend-unavailable banner and **never invents results**. To power browser verify:
-
-1. Host `mailsure-api` (Render Blueprint or self-hosted HTTP) with `OPENVERIFY_TRANSPORT=http`, `OPENVERIFY_WEBSITE_API_ENABLED=true`, and `OPENVERIFY_CORS_ORIGINS=https://eneelkant.github.io`.
-2. Confirm `GET /health` reports `"website_api": true`.
-3. Set `API_BASE_URL` in `public/js/config.js` to that **real** origin only.
-
-There is no invented cloud URL in this repo — leave `API_BASE_URL` empty until you operate a backend. MCP is **not** exposed as public REST; the optional website API is verify-only (`/api/verify`, `/api/verify/batch`) plus existing `/health`. Full steps: [docs/mailsure-website.md](docs/mailsure-website.md).
-
-## Documentation
-
-- [MailSure website](docs/mailsure-website.md)
-- [Render deploy (mailsure-api)](docs/render-deploy.md)
-- [Architecture](docs/architecture.md)
-- [MCP client setup](docs/mcp-client-setup.md)
-- [Security configuration](docs/security-config.md)
-- [Validation statuses](docs/validation-statuses.md)
-- [Validation limitations](docs/validation-limitations.md)
-- [Disposable domain sync](docs/disposable-domain-sync.md)
-- [Bulk CSV](docs/bulk-csv.md)
-- [Troubleshooting](docs/troubleshooting.md)
-- [Security policy](SECURITY.md)
-- [Contributing](CONTRIBUTING.md)
-- [Changelog](CHANGELOG.md)
-
-## Development
+### Develop
 
 ```bash
 npm install
@@ -172,10 +361,4 @@ npm test
 npm run build
 ```
 
-## Benchmarks
-
-Support for large CSVs (1k / 10k / 100k) is implemented via streaming + concurrency. **No fabricated throughput numbers are published here** — measure on your hardware with `verify_csv` and report real results if you open a PR.
-
-## Security
-
-See [SECURITY.md](SECURITY.md). No paid verification APIs. No automatic CSV uploads. No outbound email.
+Issues and PRs welcome. Prefer small, focused changes — and please do not claim mailbox deliverability from DNS/MX alone.
