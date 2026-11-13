@@ -186,6 +186,105 @@ describe('MailSure frontend CSV helpers', () => {
   });
 });
 
+describe('MailSure GTM / SEO / analytics (Pages frontend)', () => {
+  const htmlFiles = [
+    'public/index.html',
+    'public/about.html',
+    'public/pricing.html',
+    'public/contact.html',
+    'public/privacy.html',
+    'public/terms.html',
+  ];
+
+  it('installs official GTM once per Pages HTML file (head + noscript), never hardcodes GA4 gtag', () => {
+    for (const rel of htmlFiles) {
+      const html = readFileSync(path.join(process.cwd(), rel), 'utf8');
+      expect(html).toContain('GTM-TNNBTBDM');
+      expect(html).toContain('gtm.start');
+      expect(html).toContain('www.googletagmanager.com/gtm.js');
+      expect(html).toContain('www.googletagmanager.com/ns.html?id=GTM-TNNBTBDM');
+      expect((html.match(/gtm\.start/g) || []).length).toBe(1);
+      expect((html.match(/ns\.html\?id=GTM-TNNBTBDM/g) || []).length).toBe(1);
+      expect(html).not.toMatch(/G-54Y7DESS9P/);
+      expect(html).not.toMatch(/googletagmanager\.com\/gtag\/js/);
+      expect(html).not.toMatch(/gtag\s*\(/);
+    }
+  });
+
+  it('uses production Pages canonicals and indexable robots on public marketing pages', () => {
+    const index = readFileSync(path.join(process.cwd(), 'public/index.html'), 'utf8');
+    expect(index).toContain('rel="canonical" href="https://eneelkant.github.io/email-validation-tool/"');
+    expect(index).toContain('name="robots" content="index,follow"');
+    expect(index).toContain('application/ld+json');
+    expect(index).toContain('"@type": "WebSite"');
+    expect(index).toContain('"@type": "SoftwareApplication"');
+    expect(index).not.toMatch(/aggregateRating|reviewCount|"price"\s*:/);
+    expect(index).toMatch(/<h1 class="hero-brand"/);
+    expect(index).toContain('Google Search Console HTML-tag verification');
+    // Example token line lives inside an HTML comment only — no live verification meta yet.
+    const indexWithoutComments = index.replace(/<!--[\s\S]*?-->/g, '');
+    expect(indexWithoutComments).not.toMatch(/<meta\s+name="google-site-verification"/);
+
+    for (const page of ['about.html', 'pricing.html', 'contact.html']) {
+      const html = readFileSync(path.join(process.cwd(), `public/${page}`), 'utf8');
+      expect(html).toContain(
+        `rel="canonical" href="https://eneelkant.github.io/email-validation-tool/${page}"`,
+      );
+      expect(html).toContain('name="robots" content="index,follow"');
+      expect(html).not.toContain('noindex');
+    }
+
+    for (const page of ['privacy.html', 'terms.html']) {
+      const html = readFileSync(path.join(process.cwd(), `public/${page}`), 'utf8');
+      expect(html).toContain('name="robots" content="noindex,follow"');
+    }
+  });
+
+  it('ships robots.txt + sitemap.xml with the GitHub Pages base path (noindex drafts excluded)', () => {
+    const robots = readFileSync(path.join(process.cwd(), 'public/robots.txt'), 'utf8');
+    expect(robots).toMatch(/Allow:\s*\//);
+    expect(robots).toContain(
+      'Sitemap: https://eneelkant.github.io/email-validation-tool/sitemap.xml',
+    );
+
+    const sitemap = readFileSync(path.join(process.cwd(), 'public/sitemap.xml'), 'utf8');
+    expect(sitemap).toContain('https://eneelkant.github.io/email-validation-tool/</loc>');
+    expect(sitemap).toContain('https://eneelkant.github.io/email-validation-tool/about.html');
+    expect(sitemap).toContain('https://eneelkant.github.io/email-validation-tool/pricing.html');
+    expect(sitemap).toContain('https://eneelkant.github.io/email-validation-tool/contact.html');
+    expect(sitemap).not.toContain('privacy.html');
+    expect(sitemap).not.toContain('terms.html');
+  });
+
+  it('pushes sanitized dataLayer events without email/CSV/PII keys', () => {
+    loadBrowserScript('public/js/analytics.js');
+    window.dataLayer = [];
+    const analytics = window.MailSureAnalytics;
+    analytics.pushEvent('email_verification_started', {
+      verification_mode: 'single',
+      email: 'secret@example.com',
+      filename: 'customers.csv',
+      overall_status: 'valid_domain',
+    });
+    expect(window.dataLayer).toHaveLength(1);
+    const payload = window.dataLayer[0] as Record<string, unknown>;
+    expect(payload.event).toBe('email_verification_started');
+    expect(payload.verification_mode).toBe('single');
+    expect(payload.overall_status).toBe('valid_domain');
+    expect(payload).not.toHaveProperty('email');
+    expect(payload).not.toHaveProperty('filename');
+
+    const cleaned = analytics.sanitizeParams({
+      email: 'a@b.com',
+      emails: ['a@b.com'],
+      csv: 'Email\na@b.com',
+      token: 'secret',
+      result_count: 3,
+    });
+    expect(cleaned).toEqual({ result_count: 3 });
+  });
+});
+
 describe('MailSure published config.js', () => {
   it('points Pages at the stable Enzonic website API without secrets or trailing slash', () => {
     const raw = readFileSync(path.join(process.cwd(), 'public/js/config.js'), 'utf8');
@@ -515,6 +614,11 @@ describe('MailSure duplicate backend warning', () => {
 
 declare global {
   interface Window {
+    dataLayer?: Array<Record<string, unknown>>;
+    MailSureAnalytics: {
+      pushEvent: (eventName: string, params?: Record<string, unknown>) => void;
+      sanitizeParams: (params: Record<string, unknown>) => Record<string, unknown>;
+    };
     MAILSURE_CONFIG: Record<string, unknown>;
     MailSureApi: {
       isConfigured: () => boolean;

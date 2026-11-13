@@ -274,6 +274,11 @@ select:focus-visible {
   color: #fff;
 }
 
+/* Keep brand-as-h1 styling identical to the previous paragraph treatment. */
+h1.hero-brand {
+  font-family: inherit;
+}
+
 .hero-tagline {
   margin: 0 0 1rem;
   max-width: 36rem;
