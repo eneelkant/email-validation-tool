@@ -70,26 +70,65 @@ height="0" width="0" style="display:none;visibility:hidden" title="Google Tag Ma
         <p>Transparent and free. No invented SaaS tiers.</p>
       </header>
 
-      <div class="pricing-block" style="margin-bottom: 3rem">
-        <h2>Open source</h2>
-        <p class="pricing-price">$0</p>
-        <p>Self-host OpenVerify MCP and use the MailSure static site under GPL-3.0.</p>
-        <ul>
-          <li>Unlimited local / self-hosted verification (your hardware, your limits)</li>
-          <li>MCP tools over STDIO and HTTP</li>
-          <li>Optional verify-only website API</li>
-          <li>No per-email credits from this project</li>
-          <li>You pay only your own hosting/DNS costs if you deploy remotely</li>
-        </ul>
-        <p style="margin-top: 1.25rem">
-          <a class="btn btn-primary" href="https://github.com/eneelkant/email-validation-tool">Get the code</a>
-        </p>
+      <div class="pricing-grid">
+        <div class="pricing-block">
+          <h2>Open source</h2>
+          <p class="pricing-price">$0</p>
+          <p>Self-host OpenVerify MCP and use the MailSure static site under GPL-3.0.</p>
+          <ul>
+            <li>Unlimited local / self-hosted verification (your hardware, your limits)</li>
+            <li>MCP tools over STDIO and HTTP</li>
+            <li>Optional verify-only website API</li>
+            <li>No per-email credits from this project</li>
+            <li>You pay only your own hosting/DNS costs if you deploy remotely</li>
+          </ul>
+          <p style="margin-top: 1.25rem">
+            <a class="btn btn-primary" href="https://github.com/eneelkant/email-validation-tool">Get the code</a>
+          </p>
+        </div>
+
+        <div class="pricing-block pricing-block--placeholder" aria-labelledby="premium-placeholder-title">
+          <p class="pricing-badge">Placeholder — UNVERIFIED</p>
+          <h2 id="premium-placeholder-title">66degrees Premium</h2>
+          <p class="pricing-price pricing-price--tbd">Not available</p>
+          <p>
+            Proposed concepts only. This is not a MailSure plan, not priced, and not confirmed by
+            public
+            <a href="https://www.66degrees.com/" target="_blank" rel="noopener noreferrer">66degrees</a>
+            documentation.
+          </p>
+          <ul>
+            <li>
+              <span class="pricing-unverified">UNVERIFIED</span>
+              Team email validation
+            </li>
+            <li>
+              <span class="pricing-unverified">UNVERIFIED</span>
+              Up to 10,000 email validations per day (proposed only — not a confirmed quota)
+            </li>
+            <li>
+              <span class="pricing-unverified">UNVERIFIED</span>
+              MCP access
+            </li>
+            <li>
+              <span class="pricing-unverified">UNVERIFIED</span>
+              Account-based authentication
+            </li>
+          </ul>
+          <p class="pricing-disclaimer">
+            Do not treat these bullets as product commitments, pricing, availability, or API terms.
+            Integration stays blocked until an official email-validation API and written commercial
+            permission exist.
+          </p>
+        </div>
       </div>
 
       <div class="prose">
         <h2>What is not for sale here</h2>
         <p>
           This page does not offer paid MailSure cloud plans, credit packs, or enterprise SKUs.
+          The “66degrees Premium” column is a labelled placeholder for discussion only — it does not
+          change open-source pricing, limits, or descriptions.
           If commercial hosting appears later, it will be documented explicitly — nothing is invented on this page.
         </p>
       </div>
@@ -119,7 +158,18 @@ height="0" width="0" style="display:none;visibility:hidden" title="Google Tag Ma
             </ul>
           </div>
         </div>
-        <p class="footer-meta">© MailSure / OpenVerify MCP contributors. GPL-3.0.</p>
+        <div class="footer-meta">
+          <p>© MailSure / OpenVerify MCP contributors. GPL-3.0.</p>
+          <p>
+            Developed by
+            <a
+              href="https://www.linkedin.com/in/neele/"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Neelkant Ekbote</a
+            >
+          </p>
+        </div>
       </div>
     </footer>
     <script src="js/config.js" defer></script>

@@ -291,6 +291,60 @@ describe('MailSure GTM / SEO / analytics (Pages frontend)', () => {
   });
 });
 
+describe('MailSure footer attribution + pricing placeholder', () => {
+  const htmlFiles = [
+    'public/index.html',
+    'public/about.html',
+    'public/pricing.html',
+    'public/contact.html',
+    'public/privacy.html',
+    'public/terms.html',
+  ];
+
+  it('attributes every public page footer to Neelkant Ekbote with a safe LinkedIn link', () => {
+    for (const rel of htmlFiles) {
+      const html = readFileSync(path.join(process.cwd(), rel), 'utf8');
+      expect(html).toContain('Developed by');
+      expect(html).toContain('>Neelkant Ekbote</a');
+      expect(html).toContain('href="https://www.linkedin.com/in/neele/"');
+      expect(html).toMatch(
+        /href="https:\/\/www\.linkedin\.com\/in\/neele\/"[^>]*target="_blank"/,
+      );
+      expect(html).toMatch(
+        /href="https:\/\/www\.linkedin\.com\/in\/neele\/"[^>]*rel="noopener noreferrer"/,
+      );
+      expect(html).toContain('© MailSure / OpenVerify MCP contributors. GPL-3.0.');
+      expect(html).toContain('class="footer-meta"');
+      expect(html).toContain('class="site-footer"');
+    }
+  });
+
+  it('keeps open-source pricing unchanged and labels 66degrees Premium as UNVERIFIED placeholder', () => {
+    const html = readFileSync(path.join(process.cwd(), 'public/pricing.html'), 'utf8');
+    expect(html).toContain('Open source');
+    expect(html).toContain('$0');
+    expect(html).toContain('Unlimited local / self-hosted verification (your hardware, your limits)');
+    expect(html).toContain('MCP tools over STDIO and HTTP');
+    expect(html).toContain('Optional verify-only website API');
+    expect(html).toContain('No per-email credits from this project');
+    expect(html).toContain('You pay only your own hosting/DNS costs if you deploy remotely');
+
+    expect(html).toContain('66degrees Premium');
+    expect(html).toContain('Placeholder — UNVERIFIED');
+    expect(html).toContain('pricing-block--placeholder');
+    expect(html).toContain('Not available');
+    expect(html).toMatch(/UNVERIFIED[\s\S]*Team email validation/);
+    expect(html).toMatch(/UNVERIFIED[\s\S]*10,000 email validations per day/);
+    expect(html).toContain('proposed only — not a confirmed quota');
+    expect(html).toMatch(/UNVERIFIED[\s\S]*MCP access/);
+    expect(html).toMatch(/UNVERIFIED[\s\S]*Account-based authentication/);
+    expect(html).not.toMatch(/\$\d+(?:\.\d+)?\s*\/\s*(?:mo|month|day)/i);
+    expect(html).toMatch(
+      /does not\s+change open-source pricing, limits, or descriptions/,
+    );
+  });
+});
+
 describe('MailSure published config.js', () => {
   it('points Pages at the stable Enzonic website API without secrets or trailing slash', () => {
     const raw = readFileSync(path.join(process.cwd(), 'public/js/config.js'), 'utf8');
