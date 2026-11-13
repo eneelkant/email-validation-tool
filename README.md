@@ -9,7 +9,6 @@ It looks at **syntax**, **domain DNS/MX**, **disposable domains**, **free provid
 | **Live site** | [eneelkant.github.io/email-validation-tool](https://eneelkant.github.io/email-validation-tool/) |
 | **Source** | [github.com/eneelkant/email-validation-tool](https://github.com/eneelkant/email-validation-tool) |
 | **License** | [GPL-3.0](LICENSE) |
-| **Architecture map** | [gitdiagram.com/eneelkant/email-validation-tool](https://gitdiagram.com/eneelkant/email-validation-tool) |
 
 Open-source and free to use. Env variable names still start with `OPENVERIFY_*` for compatibility; the product name is **MailSure**.
 
@@ -78,7 +77,9 @@ flowchart LR
 
 ### Deeper picture (optional)
 
-Interfaces → validation → storage, as implemented in this repo (also visualized on [GitDiagram](https://gitdiagram.com/eneelkant/email-validation-tool)):
+[![Architecture diagram of eneelkant/email-validation-tool](https://gitdiagram.com/eneelkant/email-validation-tool/diagram.png)](https://gitdiagram.com/eneelkant/email-validation-tool?utm_source=readme&utm_medium=picture)
+
+Interfaces → validation → storage, as implemented in this repo:
 
 - **Interfaces:** MCP (STDIO / Streamable HTTP), optional website API, static Pages UI
 - **Validation:** syntax → DNS → disposable / free-provider / role → optional SMTP/catch-all
@@ -343,7 +344,6 @@ Full notes: [docs/validation-limitations.md](docs/validation-limitations.md), [S
 |----------|------|
 | Live site | https://eneelkant.github.io/email-validation-tool/ |
 | Repository | https://github.com/eneelkant/email-validation-tool |
-| Architecture diagram | https://gitdiagram.com/eneelkant/email-validation-tool |
 | MCP client setup | [docs/mcp-client-setup.md](docs/mcp-client-setup.md) |
 | Validation statuses | [docs/validation-statuses.md](docs/validation-statuses.md) |
 | Validation limitations | [docs/validation-limitations.md](docs/validation-limitations.md) |
