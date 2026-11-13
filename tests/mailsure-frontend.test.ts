@@ -221,9 +221,15 @@ describe('MailSure GTM / SEO / analytics (Pages frontend)', () => {
     expect(index).not.toMatch(/aggregateRating|reviewCount|"price"\s*:/);
     expect(index).toMatch(/<h1 class="hero-brand"/);
     expect(index).toContain('Google Search Console HTML-tag verification');
-    // Example token line lives inside an HTML comment only — no live verification meta yet.
-    const indexWithoutComments = index.replace(/<!--[\s\S]*?-->/g, '');
-    expect(indexWithoutComments).not.toMatch(/<meta\s+name="google-site-verification"/);
+    // Placeholder example remains only inside the HTML comment; live meta uses the real token once.
+    expect(index).toContain('content="PASTE_TOKEN_FROM_SEARCH_CONSOLE"');
+    const gscLive =
+      /<meta\s+name="google-site-verification"\s+content="IOAw1bwANWbMhU6BXCj4srZ2wpFRtDt9LLMsHRCBbM4"\s*\/>/;
+    for (const rel of htmlFiles) {
+      const html = readFileSync(path.join(process.cwd(), rel), 'utf8');
+      const withoutComments = html.replace(/<!--[\s\S]*?-->/g, '');
+      expect(withoutComments.match(gscLive)?.length ?? 0).toBe(1);
+    }
 
     for (const page of ['about.html', 'pricing.html', 'contact.html']) {
       const html = readFileSync(path.join(process.cwd(), `public/${page}`), 'utf8');
